@@ -1,15 +1,18 @@
 """
-Document models — Document and DocumentChunk with pgvector embeddings.
+Document model for uploaded PDF files.
 """
 
+import logging
 import uuid
 
 from django.conf import settings
 from django.db import models
-from django.db.models import CASCADE, SET_NULL
+from django.db.models import CASCADE, Q, SET_NULL
 
 from apps.core.models import Organization, TimeStampedModel
 from apps.documents.services.storage import compute_file_hash, document_upload_path
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentManager(models.Manager):
@@ -18,6 +21,10 @@ class DocumentManager(models.Manager):
 
     def completed(self):
         return self.filter(status=Document.Status.COMPLETED)
+
+    def active(self):
+        """Return only active documents."""
+        return self.filter(is_active=True)
 
 
 class Document(TimeStampedModel):
@@ -33,18 +40,18 @@ class Document(TimeStampedModel):
     )
     title = models.CharField(max_length=500)
     file = models.FileField(upload_to=document_upload_path, blank=True, null=True)
-    # SHA-256 of the file contents; computed automatically on save when a file is present
-    file_hash = models.CharField(max_length=64, db_index=True, blank=True, null=True)
+    file_hash = models.CharField(
+        max_length=64, db_index=True, blank=True, default=""
+    )
+    is_active = models.BooleanField(default=True, help_text="Mark as inactive to hide from normal operations")
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
         default=Status.PENDING,
         db_index=True,
     )
-    error_message = models.TextField(blank=True, null=True)
-    metadata = models.JSONField(
-        default=dict, blank=True
-    )  # original_filename, file_size, page_count, mime_type
+    error_message = models.TextField(blank=True, default="")
+    metadata = models.JSONField(default=dict, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=SET_NULL,
@@ -55,29 +62,6 @@ class Document(TimeStampedModel):
     processed_at = models.DateTimeField(null=True, blank=True)
 
     objects = DocumentManager()
-
-    def save(self, *args, **kwargs):
-        """Compute file_hash automatically if a file is attached and hash is missing.
-
-        This keeps the admin form simple: `file_hash` is not required and is updated
-        by the model when a file is present.
-        """
-        # Only attempt to compute hash if a file object is present and hash is empty
-        try:
-            file_field = getattr(self, 'file', None)
-        except Exception:
-            file_field = None
-
-        if file_field and (not self.file_hash):
-            # Some file representations support .chunks(); guard accordingly
-            if hasattr(file_field, 'chunks'):
-                try:
-                    self.file_hash = compute_file_hash(file_field)
-                except Exception:
-                    # If hashing fails for any reason, leave file_hash blank and proceed
-                    self.file_hash = None
-
-        super().save(*args, **kwargs)
 
     class Meta:
         db_table = "documents"
@@ -97,16 +81,30 @@ class Document(TimeStampedModel):
             models.UniqueConstraint(
                 fields=["organization", "file_hash"],
                 name="unique_document_per_org",
+                condition=Q(file_hash__gt=""),
             ),
         ]
 
     def __str__(self):
         return self.title
 
+    def save(self, *args, **kwargs):
+        """Auto-compute file_hash when a new file is attached."""
+        file_field = self.file
+        if file_field and hasattr(file_field, "chunks"):
+            try:
+                self.file_hash = compute_file_hash(file_field)
+            except Exception:
+                logger.exception("Failed to compute file hash for %s", self.title)
+        super().save(*args, **kwargs)
+
     @property
     def is_processed(self) -> bool:
-        return self.status == Document.Status.COMPLETED
+        return self.status == self.Status.COMPLETED
 
     @property
     def chunk_count(self) -> int:
-        return self.chunks.count()
+        try:
+            return self.chunks.count()
+        except AttributeError:
+            return 0
