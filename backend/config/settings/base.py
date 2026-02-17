@@ -5,23 +5,20 @@ Base Django settings for policy-chatbot project.
 import os
 from pathlib import Path
 
-import environ
-
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Environment variables
-env = environ.Env(
-    DEBUG=(bool, False),
-)
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+# No built-in .env loader: environment variables must be provided by the runtime.
+# Use direct os.environ lookups below.
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY')
+SECRET_KEY = "aaa"
 
-DEBUG = env('DEBUG')
+# DEBUG flag (truthy values: 1,true,yes,on)
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('1', 'true', 'yes', 'on')
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
+# ALLOWED_HOSTS (comma-separated list)
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
 
 # ---------------------------------------------------------------------------
 # Application definition
@@ -95,11 +92,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DB_NAME'),
-        'USER': env('DB_USER'),
-        'PASSWORD': env('DB_PASSWORD'),
-        'HOST': env('DB_HOST'),
-        'PORT': env('DB_PORT', default='5432'),
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': os.environ.get('DB_HOST'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
         'OPTIONS': {
             'options': '-c search_path=public',
         },
@@ -141,10 +138,10 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # ---------------------------------------------------------------------------
 
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID', default='')
-AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY', default='')
-AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME', default='')
-AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='us-east-1')
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', 'us-east-1')
 AWS_DEFAULT_ACL = None
 AWS_S3_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',
@@ -157,7 +154,7 @@ AWS_S3_OBJECT_PARAMETERS = {
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': env('REDIS_URL', default='redis://localhost:6379/1'),
+        'LOCATION': os.environ.get('REDIS_URL', 'redis://localhost:6379/1'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         },
@@ -207,15 +204,15 @@ SPECTACULAR_SETTINGS = {
 # ---------------------------------------------------------------------------
 
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+CORS_ALLOWED_ORIGINS = [h.strip() for h in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if h.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
 # ---------------------------------------------------------------------------
 # LLM provider keys
 # ---------------------------------------------------------------------------
 
-OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
-ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
 # ---------------------------------------------------------------------------
 # Document processing
@@ -225,15 +222,15 @@ MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 ALLOWED_DOCUMENT_TYPES = ['application/pdf']
 CHUNK_SIZE = 1000  # tokens
 CHUNK_OVERLAP = 200  # tokens
-EMBEDDING_MODEL = env('EMBEDDING_MODEL', default='text-embedding-3-small')
+EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'text-embedding-3-small')
 EMBEDDING_DIMENSIONS = 1536
 
 # ---------------------------------------------------------------------------
 # LLM defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_LLM_PROVIDER = env('DEFAULT_LLM_PROVIDER', default='openai')
-DEFAULT_LLM_MODEL = env('DEFAULT_LLM_MODEL', default='gpt-4-turbo-preview')
+DEFAULT_LLM_PROVIDER = os.environ.get('DEFAULT_LLM_PROVIDER', 'openai')
+DEFAULT_LLM_MODEL = os.environ.get('DEFAULT_LLM_MODEL', 'gpt-4-turbo-preview')
 DEFAULT_LLM_TEMPERATURE = 0.7
 DEFAULT_LLM_MAX_TOKENS = 1000
 

@@ -8,7 +8,8 @@ from django.conf import settings
 from django.db import models
 from django.db.models import CASCADE, SET_NULL
 
-from apps.core.models import Organization
+from apps.core.models import Organization, TimeStampedModel
+from apps.documents.services.storage import document_upload_path
 
 
 class DocumentManager(models.Manager):
@@ -19,7 +20,7 @@ class DocumentManager(models.Manager):
         return self.filter(status=Document.Status.COMPLETED)
 
 
-class Document(models.Model):
+class Document(TimeStampedModel):
     class Status(models.TextChoices):
         PENDING = "pending", "Pending"
         PROCESSING = "processing", "Processing"
@@ -31,7 +32,7 @@ class Document(models.Model):
         Organization, on_delete=CASCADE, related_name="documents"
     )
     title = models.CharField(max_length=500)
-    file_path = models.CharField(max_length=1000)  # S3 key
+    file = models.FileField(upload_to=document_upload_path)
     file_hash = models.CharField(max_length=64, db_index=True)  # SHA-256
     status = models.CharField(
         max_length=20,
@@ -50,8 +51,6 @@ class Document(models.Model):
         blank=True,
         related_name="uploaded_documents",
     )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     processed_at = models.DateTimeField(null=True, blank=True)
 
     objects = DocumentManager()

@@ -192,7 +192,7 @@ BASE_REQUIREMENTS = """
 Django==5.0.1
 djangorestframework==3.14.0
 django-cors-headers==4.3.1
-django-environ==0.11.2
+# django-environ removed — use runtime environment variables instead
 django-extensions==3.2.3
 django-filter==23.5
 
@@ -228,7 +228,6 @@ anthropic==0.8.1
 # Authentication and Security
 pyjwt==2.8.0
 cryptography==42.0.1
-python-decouple==3.8
 
 # API Documentation
 drf-spectacular==0.27.0
@@ -289,23 +288,21 @@ Base Django settings for policy-chatbot project.
 
 import os
 from pathlib import Path
-import environ
 
 # Build paths
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# Environment variables
-env = environ.Env(
-    DEBUG=(bool, False)
-)
-environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+# No built-in .env loader: environment variables must be provided by the runtime.
+# Use direct os.environ lookups below.
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = env('SECRET_KEY')
+SECRET_KEY = os.environ.get('SECRET_KEY')
 
-DEBUG = env('DEBUG')
+# DEBUG flag (truthy values: 1,true,yes,on)
+DEBUG = os.environ.get('DEBUG', 'False').lower() in ('1', 'true', 'yes', 'on')
 
-ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
+# ALLOWED_HOSTS (comma-separated list)
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',') if h.strip()]
 
 # Application definition
 INSTALLED_APPS = [
@@ -315,7 +312,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+
     # Third party
     'rest_framework',
     'corsheaders',
@@ -323,13 +320,6 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'django_celery_beat',
     'django_celery_results',
-    
-    # Local apps
-    'apps.core',
-    'apps.documents',
-    'apps.conversations',
-    'apps.widget',
-    'apps.analytics',
 ]
 
 MIDDLEWARE = [
@@ -369,11 +359,11 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('DB_NAME'),
-        'USER': env('DB_USER'),
-        'PASSWORD': env('DB_PASSWORD'),
-        'HOST': env('DB_HOST'),
-        'PORT': env('DB_PORT', default='5432'),
+        'NAME': os.environ.get('DB_NAME'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASSWORD'),
+        'HOST': os.environ.get('DB_HOST'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
         'OPTIONS': {
             'options': '-c search_path=public'
         }
@@ -404,18 +394,18 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files (S3)
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
-AWS_ACCESS_KEY_ID = env('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')
-AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME')
-AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME', default='us-east-1')
+AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', '')
+AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', '')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', '')
+AWS_S3_REGION_NAME = os.environ.get('AWS_S3_REGION_NAME', default='us-east-1')
 AWS_DEFAULT_ACL = None
 AWS_S3_OBJECT_PARAMETERS = {
     'CacheControl': 'max-age=86400',
 }
 
 # Celery Configuration
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', default='redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
@@ -427,7 +417,7 @@ CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': env('REDIS_URL', default='redis://localhost:6379/1'),
+        'LOCATION': os.environ.get('REDIS_URL', default='redis://localhost:6379/1'),
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
         }
@@ -460,24 +450,24 @@ REST_FRAMEWORK = {
 
 # CORS Settings
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+CORS_ALLOWED_ORIGINS = [h.strip() for h in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if h.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
 # Application Settings
-OPENAI_API_KEY = env('OPENAI_API_KEY', default='')
-ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY', default='')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', default='')
+ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', default='')
 
 # Document Processing Settings
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 ALLOWED_DOCUMENT_TYPES = ['application/pdf']
 CHUNK_SIZE = 1000  # tokens
 CHUNK_OVERLAP = 200  # tokens
-EMBEDDING_MODEL = env('EMBEDDING_MODEL', default='text-embedding-3-small')
+EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', default='text-embedding-3-small')
 EMBEDDING_DIMENSIONS = 1536
 
 # LLM Settings
-DEFAULT_LLM_PROVIDER = env('DEFAULT_LLM_PROVIDER', default='openai')
-DEFAULT_LLM_MODEL = env('DEFAULT_LLM_MODEL', default='gpt-4-turbo-preview')
+DEFAULT_LLM_PROVIDER = os.environ.get('DEFAULT_LLM_PROVIDER', default='openai')
+DEFAULT_LLM_MODEL = os.environ.get('DEFAULT_LLM_MODEL', default='gpt-4-turbo-preview')
 DEFAULT_LLM_TEMPERATURE = 0.7
 DEFAULT_LLM_MAX_TOKENS = 1000
 

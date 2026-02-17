@@ -9,6 +9,17 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 # ---------------------------------------------------------------------------
+# Database — SQLite for local development
+# ---------------------------------------------------------------------------
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',  # noqa: F405
+    }
+}
+
+# ---------------------------------------------------------------------------
 # Debug toolbar
 # ---------------------------------------------------------------------------
 
@@ -45,9 +56,13 @@ LOGGING = {
     },
     'loggers': {
         'django.db.backends': {
-            'level': 'DEBUG',
+            'level': 'WARNING',
             'handlers': ['console'],
             'propagate': False,
         },
     },
 }
+
+# Media (local storage for development)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'  # noqa: F405

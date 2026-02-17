@@ -9,6 +9,8 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -32,3 +34,17 @@ urlpatterns = [
         name='redoc',
     ),
 ]
+
+# Include Django Debug Toolbar URLs when in DEBUG and debug_toolbar is installed
+if settings.DEBUG:
+    try:
+        import debug_toolbar  # noqa: F401
+
+        urlpatterns = [path('__debug__/', include('debug_toolbar.urls'))] + urlpatterns
+    except Exception:
+        # If debug_toolbar isn't available, skip including its URLs.
+        pass
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

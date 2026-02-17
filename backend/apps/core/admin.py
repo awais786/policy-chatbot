@@ -5,7 +5,13 @@ Admin configuration for core models (Organization, User).
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 
-from apps.core.models import Organization, User
+from apps.core.models import Organization, User, Website
+
+
+class WebsiteInline(admin.TabularInline):
+    model = Website
+    extra = 1
+    fields = ("domain", "name", "url", "is_primary", "is_active")
 
 
 @admin.register(Organization)
@@ -17,6 +23,8 @@ class OrganizationAdmin(admin.ModelAdmin):
     search_fields = ("name", "slug")
     readonly_fields = ("id", "api_key_hash", "created_at", "updated_at")
     prepopulated_fields = {"slug": ("name",)}
+
+    inlines = [WebsiteInline]
 
     fieldsets = (
         (
@@ -70,4 +78,19 @@ class UserAdmin(BaseUserAdmin):
                 "fields": ("organization", "role"),
             },
         ),
+    )
+
+
+@admin.register(Website)
+class WebsiteAdmin(admin.ModelAdmin):
+    """Admin interface for Website model."""
+
+    list_display = ("domain", "organization", "is_primary", "is_active", "created_at")
+    list_filter = ("is_primary", "is_active", "organization")
+    search_fields = ("domain", "organization__name")
+    readonly_fields = ("id", "created_at", "updated_at")
+    fieldsets = (
+        ("Website Info", {"fields": ("id", "organization", "name", "domain", "url")}),
+        ("Settings", {"fields": ("is_primary", "is_active")}),
+        ("Timestamps", {"fields": ("created_at", "updated_at")}),
     )
