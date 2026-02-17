@@ -153,31 +153,19 @@ class DocumentChunk(TimeStampedModel):
     def __str__(self):
         return f"{self.document.title} - Chunk {self.chunk_index}"
 
-# Add signal to automatically schedule processing for new file uploads
 @receiver(post_save, sender=Document)
 def auto_schedule_processing(sender, instance, created, **kwargs):
     """
-    Automatically schedule processing when a document is saved with a file.
+    Automatically schedule processing when a document is saved with a file
+    and is still in PENDING status. Works from admin, API, shell, etc.
 
-    This ensures processing is triggered regardless of how the document is created
-    (admin, API, shell, etc.) as long as it has a file and is in PENDING status.
+    The task itself guards against double-processing (skips if already
+    COMPLETED), so even if this fires more than once it's safe.
     """
-    logger.info(f"Signal triggered for document: {instance.title}, created: {created}")
-    logger.info(f"Document file: {instance.file}, status: {instance.status}")
+    if not (instance.file and instance.status == Document.Status.PENDING):
+        return
 
-    # Check each condition separately for debugging
-    has_file = bool(instance.file)
-    is_pending = instance.status == Document.Status.PENDING
-    has_file_name = hasattr(instance.file, 'name') and instance.file.name if instance.file else False
+    if not (hasattr(instance.file, "name") and instance.file.name):
+        return
 
-    logger.info(f"Conditions - has_file: {has_file}, is_pending: {is_pending}, has_file_name: {has_file_name}")
-
-    if has_file and is_pending and has_file_name:
-        try:
-            logger.info(f"Scheduling processing for document: {instance.title}")
-            instance.schedule_processing()
-            logger.info(f"Successfully auto-scheduled processing for document: {instance.title}")
-        except Exception as e:
-            logger.error(f"Failed to schedule processing for document {instance.title}: {e}", exc_info=True)
-    else:
-        logger.info(f"Conditions not met for auto-scheduling: {instance.title}")
+    instance.schedule_processing()

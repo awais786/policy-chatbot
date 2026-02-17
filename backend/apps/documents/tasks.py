@@ -94,29 +94,19 @@ def process_document(self, document_id: str) -> dict:
 
         logger.info("Created %d chunks", len(chunks))
 
-        # --- Step 3: Generate embeddings (skip if OpenAI not configured) ---
+        # --- Step 3: Generate embeddings via configured provider ---
         embeddings = [None] * len(chunks)
-        openai_key = getattr(settings, "OPENAI_API_KEY", "")
+        try:
+            from apps.documents.services.embeddings import generate_embeddings
 
-        if openai_key:
-            try:
-                from apps.documents.services.embeddings import (
-                    EmbeddingError,
-                    generate_embeddings,
-                )
-
-                logger.info("Step 3/4: Generating embeddings for %d chunks", len(chunks))
-                chunk_texts = [c.content for c in chunks]
-                embeddings = generate_embeddings(chunk_texts)
-            except Exception as exc:
-                logger.warning(
-                    "Embedding generation failed for %s: %s. "
-                    "Chunks will be stored without embeddings.",
-                    document.title, exc,
-                )
-        else:
-            logger.info(
-                "Step 3/4: Skipping embeddings (OPENAI_API_KEY not configured)"
+            logger.info("Step 3/4: Generating embeddings for %d chunks", len(chunks))
+            chunk_texts = [c.content for c in chunks]
+            embeddings = generate_embeddings(chunk_texts)
+        except Exception as exc:
+            logger.warning(
+                "Embedding generation failed for %s: %s. "
+                "Chunks will be stored without embeddings.",
+                document.title, exc,
             )
 
         # --- Step 4: Store chunks + embeddings ---

@@ -87,10 +87,9 @@ class DocumentAdmin(admin.ModelAdmin):
         if not obj.created_by and request.user and request.user.is_authenticated:
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
+        # post_save signal auto-triggers processing when status=PENDING + file exists
 
-        # Trigger async processing when a file is uploaded/changed
         if "file" in form.changed_data and obj.file:
-            obj.schedule_processing()
             messages.info(
                 request,
                 f'Processing started for "{obj.title}". '
@@ -104,8 +103,8 @@ class DocumentAdmin(admin.ModelAdmin):
             if doc.file:
                 doc.status = Document.Status.PENDING
                 doc.error_message = ""
+                # save() triggers post_save signal → auto schedules processing
                 doc.save(update_fields=["status", "error_message", "updated_at"])
-                doc.schedule_processing()
                 count += 1
 
         messages.success(
