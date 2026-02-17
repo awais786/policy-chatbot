@@ -44,6 +44,7 @@ def process_document(self, document_id: str) -> dict:
             extract_text_from_file,
         )
         from apps.documents.services.text_chunker import chunk_text
+        from django.db import transaction
     except Exception as exc:
         logger.exception("Failed to import required modules")
         return {"status": "error", "detail": f"Import error: {exc}"}
@@ -97,29 +98,32 @@ def process_document(self, document_id: str) -> dict:
         # --- Step 3: Save chunks to database (without embeddings) ---
         logger.info("Step 3/3: Saving chunks to database")
 
-        # Delete existing chunks for this document (idempotent reprocessing)
-        document.chunks.all().delete()
-
-        chunk_objects = []
-        for chunk_data in chunks:
-            chunk_objects.append(DocumentChunk(
-                document=document,
-                organization=document.organization,
-                content=chunk_data.content,
-                chunk_index=chunk_data.chunk_index,
-                # embedding=None by default - will be populated later
-            ))
-
         try:
-            DocumentChunk.objects.bulk_create(chunk_objects)
+            with transaction.atomic():
+                # Delete existing chunks for this document (idempotent reprocessing)
+                document.chunks.all().delete()
+
+                chunk_objects = []
+                for chunk_data in chunks:
+                    chunk_objects.append(DocumentChunk(
+                        document=document,
+                        organization=document.organization,
+                        content=chunk_data.content,
+                        chunk_index=chunk_data.chunk_index,
+                        # embedding=None by default - will be populated later
+                    ))
+
+                DocumentChunk.objects.bulk_create(chunk_objects)
+
+                # Mark document as completed (chunking phase done)
+                document.status = Document.Status.COMPLETED
+                document.processed_at = timezone.now()
+                document.save(update_fields=["status", "processed_at", "updated_at"])
+
             logger.info("Saved %d chunks to database", len(chunk_objects))
+
         except Exception as exc:
             raise PDFExtractionError(f"Failed to save chunks to database: {exc}")
-
-        # --- Mark document as completed (chunking phase done) ---
-        document.status = Document.Status.COMPLETED
-        document.processed_at = timezone.now()
-        document.save(update_fields=["status", "processed_at", "updated_at"])
 
         logger.info("Document processing completed: %s", document.title)
 
@@ -144,16 +148,22 @@ def process_document(self, document_id: str) -> dict:
 
     except PDFExtractionError as exc:
         logger.error("Document %s processing failed: %s", document_id, exc)
-        document.status = Document.Status.FAILED
-        document.error_message = str(exc)
-        document.save(update_fields=["status", "error_message", "updated_at"])
+        try:
+            document.status = Document.Status.FAILED
+            document.error_message = str(exc)
+            document.save(update_fields=["status", "error_message", "updated_at"])
+        except Exception as save_exc:
+            logger.error("Failed to save error status for document %s: %s", document_id, save_exc)
         return {"status": "failed", "detail": str(exc)}
 
     except Exception as exc:
         logger.exception("Unexpected error processing document %s", document_id)
-        document.status = Document.Status.FAILED
-        document.error_message = f"Unexpected error: {exc}"
-        document.save(update_fields=["status", "error_message", "updated_at"])
+        try:
+            document.status = Document.Status.FAILED
+            document.error_message = f"Unexpected error: {exc}"
+            document.save(update_fields=["status", "error_message", "updated_at"])
+        except Exception as save_exc:
+            logger.error("Failed to save error status for document %s: %s", document_id, save_exc)
         return {"status": "failed", "detail": str(exc)}
 
 
@@ -182,6 +192,7 @@ def generate_embeddings_for_document(self, document_id: str) -> dict:
     try:
         from apps.documents.models import Document, DocumentChunk
         from apps.documents.services.embeddings import generate_embeddings, EmbeddingError
+        from django.db import transaction
     except Exception as exc:
         logger.exception("Failed to import required modules for embedding generation")
         return {"status": "error", "detail": f"Import error: {exc}"}
@@ -206,20 +217,21 @@ def generate_embeddings_for_document(self, document_id: str) -> dict:
         # Extract text content from chunks
         chunk_texts = [chunk.content for chunk in chunks_without_embeddings]
 
-        # Generate embeddings in batch
+        # Generate embeddings in batch (outside of database transaction)
         embeddings = generate_embeddings(chunk_texts)
 
         if len(embeddings) != len(chunk_texts):
             raise EmbeddingError(f"Expected {len(chunk_texts)} embeddings, got {len(embeddings)}")
 
-        # Update chunks with their embeddings
-        chunks_to_update = []
-        for chunk, embedding in zip(chunks_without_embeddings, embeddings):
-            chunk.embedding = embedding
-            chunks_to_update.append(chunk)
+        # Update chunks with their embeddings using atomic transaction
+        with transaction.atomic():
+            chunks_to_update = []
+            for chunk, embedding in zip(chunks_without_embeddings, embeddings):
+                chunk.embedding = embedding
+                chunks_to_update.append(chunk)
 
-        # Batch update chunks with embeddings
-        DocumentChunk.objects.bulk_update(chunks_to_update, ['embedding'], batch_size=100)
+            # Batch update chunks with embeddings
+            DocumentChunk.objects.bulk_update(chunks_to_update, ['embedding'], batch_size=100)
 
         logger.info("Successfully generated embeddings for %d chunks in document: %s",
                    len(chunks_to_update), document.title)
@@ -238,6 +250,9 @@ def generate_embeddings_for_document(self, document_id: str) -> dict:
         if self.request.retries < self.max_retries:
             logger.info("Retrying embedding generation for document %s (attempt %d/%d)",
                        document.title, self.request.retries + 1, self.max_retries)
+            # Close any open database connections to avoid transaction issues
+            from django.db import connection
+            connection.close()
             raise self.retry(countdown=self.default_retry_delay, exc=exc)
         else:
             return {
@@ -249,6 +264,9 @@ def generate_embeddings_for_document(self, document_id: str) -> dict:
 
     except Exception as exc:
         logger.exception("Unexpected error during embedding generation for document %s", document.title)
+        # Close any open database connections to avoid transaction issues
+        from django.db import connection
+        connection.close()
         return {
             "status": "error",
             "document_id": str(document.id),

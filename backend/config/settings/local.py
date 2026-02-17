@@ -101,10 +101,9 @@ CELERY_TASK_EAGER_PROPAGATES = True
 # ---------------------------------------------------------------------------
 
 # Use Hugging Face for local development (no server required, runs offline)
-EMBEDDING_PROVIDER = 'ollama'
-OLLAMA_BASE_URL = 'http://localhost:11434'
-OLLAMA_EMBEDDING_MODEL = 'sentence-transformers/all-MiniLM-L6-v2'
-EMBEDDING_DIMENSIONS = 768
+EMBEDDING_PROVIDER = 'huggingface'
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+HUGGINGFACE_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 # Alternative: Use Ollama (requires running ollama serve)

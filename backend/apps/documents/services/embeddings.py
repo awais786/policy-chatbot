@@ -62,8 +62,13 @@ class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
         except Exception as e:
             raise EmbeddingError(f"Failed to initialize OpenAI client: {e}") from e
 
-        self.model = getattr(settings, "EMBEDDING_MODEL", "text-embedding-3-small")
-        self.dimensions = getattr(settings, "EMBEDDING_DIMENSIONS", 1536)
+        self.model = getattr(settings, "EMBEDDING_MODEL", None)
+        if not self.model:
+            raise EmbeddingError("EMBEDDING_MODEL is not configured. Set it in settings.")
+
+        self.dimensions = getattr(settings, "EMBEDDING_DIMENSIONS", None)
+        if not self.dimensions:
+            raise EmbeddingError("EMBEDDING_DIMENSIONS is not configured. Set it in settings.")
 
     def provider_name(self) -> str:
         return f"openai ({self.model})"
@@ -102,7 +107,12 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
     """
 
     def __init__(self):
-        base_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
+        base_url = getattr(settings, "OLLAMA_BASE_URL", None)
+        if not base_url:
+            raise EmbeddingError(
+                "OLLAMA_BASE_URL is not configured. "
+                "Set it in settings (e.g., 'http://localhost:11434')"
+            )
 
         # Ensure base_url doesn't end with slash to avoid issues
         if base_url.endswith('/'):
@@ -120,7 +130,12 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
                 f"Error: {e}"
             ) from e
 
-        self.model = getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+        self.model = getattr(settings, "OLLAMA_EMBEDDING_MODEL", None)
+        if not self.model:
+            raise EmbeddingError(
+                "OLLAMA_EMBEDDING_MODEL is not configured. "
+                "Set it in settings (e.g., 'nomic-embed-text')"
+            )
 
     def provider_name(self) -> str:
         return f"ollama ({self.model})"
@@ -172,17 +187,23 @@ class HuggingFaceEmbeddingProvider(BaseEmbeddingProvider):
                 "Install it with: pip install sentence-transformers"
             )
 
-        self.model_name = getattr(
-            settings, "HUGGINGFACE_EMBEDDING_MODEL",
-            getattr(settings, "WAGTAIL_RAG_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-        )
+        # Get model name from settings - fail if not configured
+        self.model_name = getattr(settings, "HUGGINGFACE_EMBEDDING_MODEL", None)
+        if not self.model_name:
+            self.model_name = getattr(settings, "EMBEDDING_MODEL", None)
+
+        if not self.model_name:
+            raise EmbeddingError(
+                "HUGGINGFACE_EMBEDDING_MODEL or EMBEDDING_MODEL must be configured. "
+                "Set one of these in your settings (e.g., 'sentence-transformers/all-MiniLM-L6-v2')"
+            )
 
         try:
             logger.info(f"Loading Hugging Face model: {self.model_name}")
             self.model = SentenceTransformer(self.model_name)
             logger.info(f"Successfully loaded Hugging Face model: {self.model_name}")
         except Exception as e:
-            raise EmbeddingError(f"Failed to load Hugging Face model {self.model_name}: {e}")
+            raise EmbeddingError(f"Failed to load Hugging Face model {self.model_name}: {e}") from e
 
     def provider_name(self) -> str:
         return f"huggingface ({self.model_name})"
@@ -222,9 +243,15 @@ def get_embedding_provider() -> BaseEmbeddingProvider:
     """
     Return the embedding provider configured in settings.EMBEDDING_PROVIDER.
 
-    Defaults to "huggingface" if not set (no external dependencies required).
+    Raises EmbeddingError if EMBEDDING_PROVIDER is not configured.
     """
-    name = getattr(settings, "EMBEDDING_PROVIDER", "huggingface")
+    name = getattr(settings, "EMBEDDING_PROVIDER", None)
+    if not name:
+        raise EmbeddingError(
+            "EMBEDDING_PROVIDER is not configured. "
+            f"Set EMBEDDING_PROVIDER in settings to one of: {', '.join(PROVIDERS)}"
+        )
+
     provider_cls = PROVIDERS.get(name)
 
     if provider_cls is None:
@@ -275,7 +302,7 @@ def test_embedding_service() -> dict:
         Dictionary with test results and configuration info.
     """
     result = {
-        "provider": getattr(settings, "EMBEDDING_PROVIDER", "openai"),
+        "provider": getattr(settings, "EMBEDDING_PROVIDER", "not set"),
         "success": False,
         "error": None,
         "dimensions": None,
