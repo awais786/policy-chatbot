@@ -133,7 +133,7 @@ class DocumentChunk(TimeStampedModel):
     )
     content = models.TextField()
     chunk_index = models.IntegerField()
-    embedding = VectorField(dimensions=1536, null=True, blank=True)
+    embedding = VectorField(dimensions=getattr(settings, 'EMBEDDING_DIMENSIONS', 1536), null=True, blank=True)
 
     class Meta:
         db_table = "document_chunks"

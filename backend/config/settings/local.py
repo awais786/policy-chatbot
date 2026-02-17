@@ -103,7 +103,7 @@ CELERY_TASK_EAGER_PROPAGATES = True
 # Use Hugging Face for local development (no server required, runs offline)
 EMBEDDING_PROVIDER = 'huggingface'
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-HUGGINGFACE_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_DIMENSIONS = 384  # all-MiniLM-L6-v2 generates 384-dimensional vectors
 
 
 # Alternative: Use Ollama (requires running ollama serve)
