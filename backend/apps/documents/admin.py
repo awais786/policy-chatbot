@@ -112,3 +112,72 @@ class DocumentAdmin(admin.ModelAdmin):
             request,
             f"Reprocessing started for {count} document(s).",
         )
+
+
+@admin.register(DocumentChunk)
+class DocumentChunkAdmin(admin.ModelAdmin):
+    list_display = (
+        "document_title",
+        "chunk_index",
+        "organization",
+        "content_preview",
+        "content_length",
+        "has_embedding",
+        "created_at",
+    )
+    list_filter = ("organization", "document__status", "created_at", "document")
+    search_fields = ("content", "document__title", "organization__name")
+    readonly_fields = ("id", "document", "organization", "chunk_index", "created_at", "updated_at")
+    ordering = ["document", "chunk_index"]
+    list_per_page = 25
+    list_max_show_all = 100
+
+    fieldsets = (
+        (
+            "Chunk Info",
+            {"fields": ("id", "document", "organization", "chunk_index")},
+        ),
+        (
+            "Content",
+            {"fields": ("content", "content_length")},
+        ),
+        (
+            "Vector Embedding",
+            {"fields": ("embedding",), "classes": ("collapse",)},
+        ),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at")},
+        ),
+    )
+
+    def document_title(self, obj):
+        return obj.document.title
+    document_title.short_description = "Document"
+    document_title.admin_order_field = "document__title"
+
+    def content_preview(self, obj):
+        """Show formatted preview of the content with line breaks preserved"""
+        content = obj.content[:150].replace('\n', ' | ')
+        return content + "..." if len(obj.content) > 150 else content
+    content_preview.short_description = "Content Preview"
+
+    def content_length(self, obj):
+        return len(obj.content)
+    content_length.short_description = "Length"
+
+    def has_embedding(self, obj):
+        return obj.embedding is not None
+    has_embedding.boolean = True
+    has_embedding.short_description = "Has Embedding"
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('document', 'organization')
+
+    def get_readonly_fields(self, request, obj=None):
+        # Make content editable for superusers only
+        readonly = list(self.readonly_fields)
+        if obj and not request.user.is_superuser:
+            readonly.append('content')
+        return readonly
+
