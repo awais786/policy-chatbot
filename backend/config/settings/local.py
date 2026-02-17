@@ -1,5 +1,8 @@
 """
-Development settings for policy-chatbot project.
+Local settings for policy-chatbot project (development/local).
+
+This file mirrors `development.py` but is named `local.py` so local
+environments can explicitly use `config.settings.local`.
 """
 
 from .base import *  # noqa: F401, F403
@@ -73,3 +76,4 @@ DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 # Ensure media root exists when settings are imported in development
 import os
 os.makedirs(str(MEDIA_ROOT), exist_ok=True)
+

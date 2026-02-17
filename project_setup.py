@@ -591,7 +591,7 @@ from celery import Celery
 from django.conf import settings
 
 # Set default Django settings module
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.local')
 
 app = Celery('policy_chatbot')
 
