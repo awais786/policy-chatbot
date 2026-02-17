@@ -58,6 +58,7 @@ def process_document(self, document_id: str) -> dict:
         logger.info("Document %s already processed, skipping.", document_id)
         return {"status": "skipped", "detail": "Already processed"}
 
+
     # Mark as processing
     document.status = Document.Status.PROCESSING
     document.error_message = ""
@@ -134,7 +135,11 @@ def process_document(self, document_id: str) -> dict:
                 embedding=embedding if embedding else None,
             ))
 
-        DocumentChunk.objects.bulk_create(chunk_objects)
+        try:
+            DocumentChunk.objects.bulk_create(chunk_objects)
+        except Exception as exc:
+            logger.warning("Failed to create some chunks for document %s: %s", document.pk, exc)
+            # Continue processing even if some chunks couldn't be created
 
         # Mark as completed
         document.status = Document.Status.COMPLETED

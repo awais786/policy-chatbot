@@ -84,3 +84,14 @@ DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 import os
 os.makedirs(str(MEDIA_ROOT), exist_ok=True)
 
+# ---------------------------------------------------------------------------
+# Celery Configuration for Local Development
+# ---------------------------------------------------------------------------
+
+# For local development, run tasks synchronously (no Redis required)
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+
+# Or if you want async behavior locally, use Redis:
+# CELERY_BROKER_URL = 'redis://localhost:6379/0'
+# CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'

@@ -40,7 +40,6 @@ class DocumentAdmin(admin.ModelAdmin):
     search_fields = ("title", "organization__name")
     readonly_fields = (
         "id",
-        "file_hash",
         "text_content",
         "chunk_count",
         "created_at",
@@ -89,8 +88,8 @@ class DocumentAdmin(admin.ModelAdmin):
             obj.created_by = request.user
         super().save_model(request, obj, form, change)
 
-        # Trigger async processing when a new file is uploaded via admin
-        if "file" in form.changed_data:
+        # Trigger async processing when a file is uploaded/changed
+        if "file" in form.changed_data and obj.file:
             obj.schedule_processing()
             messages.info(
                 request,
