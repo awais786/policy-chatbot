@@ -95,3 +95,18 @@ CELERY_TASK_EAGER_PROPAGATES = True
 # Or if you want async behavior locally, use Redis:
 # CELERY_BROKER_URL = 'redis://localhost:6379/0'
 # CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# ---------------------------------------------------------------------------
+# Embedding Configuration for Local Development
+# ---------------------------------------------------------------------------
+
+# Use Ollama for local development (no API key required)
+EMBEDDING_PROVIDER = 'ollama'
+
+OLLAMA_BASE_URL = 'http://localhost:11434'
+OLLAMA_EMBEDDING_MODEL = 'nomic-embed-text'
+EMBEDDING_DIMENSIONS = 768
+
+# If you prefer OpenAI for local development, uncomment these lines:
+# EMBEDDING_PROVIDER = 'openai'
+# OPENAI_API_KEY = 'your-openai-api-key-here'

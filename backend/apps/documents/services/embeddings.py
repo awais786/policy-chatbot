@@ -56,7 +56,32 @@ class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
                 "OPENAI_API_KEY is not configured. "
                 "Set the OPENAI_API_KEY environment variable."
             )
-        self.client = openai.OpenAI(api_key=api_key)
+
+        # Try different initialization methods for compatibility
+        client_params = {"api_key": api_key}
+
+        try:
+            self.client = openai.OpenAI(**client_params)
+        except TypeError as e:
+            error_msg = str(e).lower()
+            if "proxies" in error_msg or "unexpected keyword argument" in error_msg:
+                # Handle version compatibility issues
+                logger.warning(f"OpenAI client initialization failed with: {e}. Trying fallback...")
+                try:
+                    # Try with just the essential parameter
+                    import openai as openai_fallback
+                    self.client = openai_fallback.OpenAI(api_key=api_key)
+                except Exception as fallback_e:
+                    raise EmbeddingError(
+                        f"Failed to initialize OpenAI client. "
+                        f"Original error: {e}. Fallback error: {fallback_e}. "
+                        f"Please check your openai library version (current: {openai.__version__ if hasattr(openai, '__version__') else 'unknown'})"
+                    ) from fallback_e
+            else:
+                raise EmbeddingError(f"Failed to initialize OpenAI client: {e}") from e
+        except Exception as e:
+            raise EmbeddingError(f"Failed to initialize OpenAI client: {e}") from e
+
         self.model = getattr(settings, "EMBEDDING_MODEL", "text-embedding-3-small")
         self.dimensions = getattr(settings, "EMBEDDING_DIMENSIONS", 1536)
 
@@ -98,10 +123,28 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
 
     def __init__(self):
         base_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
-        self.client = openai.OpenAI(
-            base_url=f"{base_url}/v1/",
-            api_key="ollama",  # Ollama ignores the key but the client requires one
-        )
+
+        try:
+            # Initialize with minimal parameters for compatibility
+            self.client = openai.OpenAI(
+                base_url=f"{base_url}/v1",
+                api_key="ollama",  # Ollama ignores the key but the client requires one
+            )
+        except TypeError as e:
+            if "proxies" in str(e):
+                # Fallback for older OpenAI library versions
+                try:
+                    self.client = openai.OpenAI(
+                        base_url=f"{base_url}/v1",
+                        api_key="ollama"
+                    )
+                except Exception as fallback_e:
+                    raise EmbeddingError(f"Failed to initialize Ollama client: {fallback_e}") from fallback_e
+            else:
+                raise EmbeddingError(f"Failed to initialize Ollama client: {e}") from e
+        except Exception as e:
+            raise EmbeddingError(f"Failed to initialize Ollama client: {e}") from e
+
         self.model = getattr(
             settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"
         )
@@ -192,3 +235,43 @@ def generate_single_embedding(text: str) -> list[float]:
     """Embed a single text string."""
     results = generate_embeddings([text])
     return results[0]
+
+
+def test_embedding_service() -> dict:
+    """
+    Test the embedding service to ensure it's working correctly.
+
+    Returns:
+        Dictionary with test results and configuration info.
+    """
+    result = {
+        "provider": getattr(settings, "EMBEDDING_PROVIDER", "openai"),
+        "success": False,
+        "error": None,
+        "dimensions": None,
+        "test_text": "This is a test for embedding generation."
+    }
+
+    try:
+        provider = get_embedding_provider()
+        result["provider_name"] = provider.provider_name()
+
+        # Test with a simple text
+        embedding = generate_single_embedding(result["test_text"])
+
+        if isinstance(embedding, list) and len(embedding) > 0:
+            result["success"] = True
+            result["dimensions"] = len(embedding)
+            logger.info(f"Embedding test successful with {result['provider_name']}, dimensions: {len(embedding)}")
+        else:
+            result["error"] = "Invalid embedding format returned"
+
+    except EmbeddingError as e:
+        result["error"] = str(e)
+        logger.error(f"Embedding test failed: {e}")
+    except Exception as e:
+        result["error"] = f"Unexpected error: {e}"
+        logger.error(f"Embedding test failed with unexpected error: {e}")
+
+    return result
+

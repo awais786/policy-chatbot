@@ -272,14 +272,3 @@ CELERY_TASK_SOFT_TIME_LIMIT = 540  # 9 minutes soft limit
 # ---------------------------------------------------------------------------
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-# base.py (production default)
-EMBEDDING_PROVIDER = 'openai'
-EMBEDDING_MODEL = 'text-embedding-3-small'
-EMBEDDING_DIMENSIONS = 1536
-
-# development.py (overrides)
-EMBEDDING_PROVIDER = 'ollama'
-OLLAMA_BASE_URL = 'http://localhost:11434'
-OLLAMA_EMBEDDING_MODEL = 'nomic-embed-text'
-EMBEDDING_DIMENSIONS = 768
