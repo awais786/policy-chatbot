@@ -262,11 +262,11 @@ class DocumentChunkAdmin(admin.ModelAdmin):
         ),
         (
             "Content",
-            {"fields": ("content", "content_length")},
+            {"fields": ("content",)},
         ),
         (
             "Vector Embedding",
-            {"fields": ("embedding", "embedding_status"), "classes": ("collapse",)},
+            {"fields": ("embedding",), "classes": ("collapse",)},
         ),
         (
             "Timestamps",
