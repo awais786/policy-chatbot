@@ -11,6 +11,8 @@ from django.db.models import CASCADE, Q, SET_NULL
 
 from apps.core.models import Organization, TimeStampedModel
 from apps.documents.services.storage import compute_file_hash, document_upload_path
+from pgvector.django import VectorField
+
 
 logger = logging.getLogger(__name__)
 
@@ -108,3 +110,9 @@ class Document(TimeStampedModel):
             return self.chunks.count()
         except AttributeError:
             return 0
+
+
+class DocumentEmbedding(TimeStampedModel):
+    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="embeddings")
+    embedding = VectorField(dimensions=1536)
+    created_at = models.DateTimeField(auto_now_add=True)

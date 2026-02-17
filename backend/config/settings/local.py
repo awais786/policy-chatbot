@@ -12,13 +12,20 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 # ---------------------------------------------------------------------------
-# Database — SQLite for local development
+# Database — PostgreSQL with pgvector for local development
 # ---------------------------------------------------------------------------
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',  # noqa: F405
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'chatbot_db',
+        'USER': 'postgres',
+        'PASSWORD': 'postgres',
+        'HOST': 'localhost',
+        'PORT': '5432',
+        'OPTIONS': {
+            'options': '-c search_path=public',
+        },
     }
 }
 

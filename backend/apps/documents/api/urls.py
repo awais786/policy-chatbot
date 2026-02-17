@@ -10,4 +10,5 @@ app_name = "documents"
 
 urlpatterns = [
     path("", DocumentListView.as_view(), name="document-list"),
+    path("<uuid:pk>/", DocumentDetailDeleteView.as_view(), name="document-detail"),
 ]
