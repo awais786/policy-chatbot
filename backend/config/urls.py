@@ -15,7 +15,6 @@ urlpatterns = [
 
     # API v1
     path('api/v1/documents/', include('apps.documents.api.urls')),
-    path('api/v1/conversations/', include('apps.conversations.api.urls')),
 
     # Widget
     path('widget/', include('apps.widget.api.urls')),
