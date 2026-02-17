@@ -1,0 +1,21 @@
+-r base.txt
+
+# Testing
+pytest>=7.4,<7.5
+pytest-django>=4.7,<4.8
+pytest-cov>=4.1,<4.2
+pytest-mock>=3.12,<3.13
+factory-boy>=3.3,<3.4
+faker>=22.2,<23.0
+
+# Code Quality
+black>=24.1,<24.2
+flake8>=7.0,<7.1
+isort>=5.13,<5.14
+pylint>=3.0,<3.1
+mypy>=1.8,<1.9
+django-stubs>=4.2,<4.3
+
+# Debugging
+ipython>=8.20,<8.21
+django-debug-toolbar>=4.2,<4.3

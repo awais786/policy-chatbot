@@ -1,0 +1,11 @@
+-r base.txt
+
+# Production Server
+gunicorn>=21.2,<21.3
+
+# Monitoring
+sentry-sdk>=1.39,<1.40
+django-prometheus>=2.3,<2.4
+
+# Performance
+django-redis>=5.4,<5.5
