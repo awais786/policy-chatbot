@@ -8,7 +8,7 @@
     {
       "id": "2",
       "content": "Phase 1: Create core models (Organization, User) and API key auth middleware",
-      "status": "pending"
+      "status": "completed"
     },
     {
       "id": "3",
