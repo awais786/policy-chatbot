@@ -100,13 +100,19 @@ CELERY_TASK_EAGER_PROPAGATES = True
 # Embedding Configuration for Local Development
 # ---------------------------------------------------------------------------
 
-# Use Ollama for local development (no API key required)
+# Use Hugging Face for local development (no server required, runs offline)
 EMBEDDING_PROVIDER = 'ollama'
-
 OLLAMA_BASE_URL = 'http://localhost:11434'
-OLLAMA_EMBEDDING_MODEL = 'nomic-embed-text'
+OLLAMA_EMBEDDING_MODEL = 'sentence-transformers/all-MiniLM-L6-v2'
 EMBEDDING_DIMENSIONS = 768
 
-# If you prefer OpenAI for local development, uncomment these lines:
+
+# Alternative: Use Ollama (requires running ollama serve)
+# EMBEDDING_PROVIDER = 'ollama'
+# OLLAMA_BASE_URL = 'http://localhost:11434'
+# OLLAMA_EMBEDDING_MODEL = 'nomic-embed-text'
+# EMBEDDING_DIMENSIONS = 768
+
+# Alternative: Use OpenAI (requires API key)
 # EMBEDDING_PROVIDER = 'openai'
 # OPENAI_API_KEY = 'your-openai-api-key-here'

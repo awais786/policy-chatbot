@@ -57,28 +57,8 @@ class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
                 "Set the OPENAI_API_KEY environment variable."
             )
 
-        # Try different initialization methods for compatibility
-        client_params = {"api_key": api_key}
-
         try:
-            self.client = openai.OpenAI(**client_params)
-        except TypeError as e:
-            error_msg = str(e).lower()
-            if "proxies" in error_msg or "unexpected keyword argument" in error_msg:
-                # Handle version compatibility issues
-                logger.warning(f"OpenAI client initialization failed with: {e}. Trying fallback...")
-                try:
-                    # Try with just the essential parameter
-                    import openai as openai_fallback
-                    self.client = openai_fallback.OpenAI(api_key=api_key)
-                except Exception as fallback_e:
-                    raise EmbeddingError(
-                        f"Failed to initialize OpenAI client. "
-                        f"Original error: {e}. Fallback error: {fallback_e}. "
-                        f"Please check your openai library version (current: {openai.__version__ if hasattr(openai, '__version__') else 'unknown'})"
-                    ) from fallback_e
-            else:
-                raise EmbeddingError(f"Failed to initialize OpenAI client: {e}") from e
+            self.client = openai.OpenAI(api_key=api_key)
         except Exception as e:
             raise EmbeddingError(f"Failed to initialize OpenAI client: {e}") from e
 
@@ -124,30 +104,23 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
     def __init__(self):
         base_url = getattr(settings, "OLLAMA_BASE_URL", "http://localhost:11434")
 
+        # Ensure base_url doesn't end with slash to avoid issues
+        if base_url.endswith('/'):
+            base_url = base_url.rstrip('/')
+
         try:
-            # Initialize with minimal parameters for compatibility
             self.client = openai.OpenAI(
                 base_url=f"{base_url}/v1",
-                api_key="ollama",  # Ollama ignores the key but the client requires one
+                api_key="ollama"  # Ollama ignores the key but the client requires one
             )
-        except TypeError as e:
-            if "proxies" in str(e):
-                # Fallback for older OpenAI library versions
-                try:
-                    self.client = openai.OpenAI(
-                        base_url=f"{base_url}/v1",
-                        api_key="ollama"
-                    )
-                except Exception as fallback_e:
-                    raise EmbeddingError(f"Failed to initialize Ollama client: {fallback_e}") from fallback_e
-            else:
-                raise EmbeddingError(f"Failed to initialize Ollama client: {e}") from e
         except Exception as e:
-            raise EmbeddingError(f"Failed to initialize Ollama client: {e}") from e
+            raise EmbeddingError(
+                f"Failed to initialize Ollama client. "
+                f"Make sure Ollama is running at {base_url}. "
+                f"Error: {e}"
+            ) from e
 
-        self.model = getattr(
-            settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text"
-        )
+        self.model = getattr(settings, "OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 
     def provider_name(self) -> str:
         return f"ollama ({self.model})"
@@ -179,12 +152,69 @@ class OllamaEmbeddingProvider(BaseEmbeddingProvider):
 
 
 # ---------------------------------------------------------------------------
+# Hugging Face provider (local, no server required)
+# ---------------------------------------------------------------------------
+
+class HuggingFaceEmbeddingProvider(BaseEmbeddingProvider):
+    """Generate embeddings using Hugging Face sentence-transformers locally.
+
+    This provider runs completely offline and doesn't require any external
+    services like Ollama or OpenAI. It uses the sentence-transformers library
+    to run models locally on your machine.
+    """
+
+    def __init__(self):
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError:
+            raise EmbeddingError(
+                "sentence-transformers library is required for Hugging Face embeddings. "
+                "Install it with: pip install sentence-transformers"
+            )
+
+        self.model_name = getattr(
+            settings, "HUGGINGFACE_EMBEDDING_MODEL",
+            getattr(settings, "WAGTAIL_RAG_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+        )
+
+        try:
+            logger.info(f"Loading Hugging Face model: {self.model_name}")
+            self.model = SentenceTransformer(self.model_name)
+            logger.info(f"Successfully loaded Hugging Face model: {self.model_name}")
+        except Exception as e:
+            raise EmbeddingError(f"Failed to load Hugging Face model {self.model_name}: {e}")
+
+    def provider_name(self) -> str:
+        return f"huggingface ({self.model_name})"
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        if not texts:
+            return []
+
+        try:
+            # Generate embeddings using sentence-transformers
+            embeddings = self.model.encode(
+                texts,
+                convert_to_tensor=False,  # Return as numpy arrays
+                show_progress_bar=len(texts) > 10,  # Show progress for large batches
+                batch_size=32  # Process in batches for memory efficiency
+            )
+
+            # Convert numpy arrays to Python lists
+            return [embedding.tolist() for embedding in embeddings]
+
+        except Exception as e:
+            raise EmbeddingError(f"Failed to generate embeddings with {self.model_name}: {e}")
+
+
+# ---------------------------------------------------------------------------
 # Provider registry & factory
 # ---------------------------------------------------------------------------
 
 PROVIDERS = {
     "openai": OpenAIEmbeddingProvider,
     "ollama": OllamaEmbeddingProvider,
+    "huggingface": HuggingFaceEmbeddingProvider,
 }
 
 
@@ -192,9 +222,9 @@ def get_embedding_provider() -> BaseEmbeddingProvider:
     """
     Return the embedding provider configured in settings.EMBEDDING_PROVIDER.
 
-    Defaults to ``"ollama"`` if not set.
+    Defaults to "huggingface" if not set (no external dependencies required).
     """
-    name = getattr(settings, "EMBEDDING_PROVIDER", "ollama")
+    name = getattr(settings, "EMBEDDING_PROVIDER", "huggingface")
     provider_cls = PROVIDERS.get(name)
 
     if provider_cls is None:
@@ -274,4 +304,3 @@ def test_embedding_service() -> dict:
         logger.error(f"Embedding test failed with unexpected error: {e}")
 
     return result
-
