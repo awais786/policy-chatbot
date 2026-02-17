@@ -242,6 +242,20 @@ DEFAULT_TOP_K = 5
 DEFAULT_SIMILARITY_THRESHOLD = 0.7
 
 # ---------------------------------------------------------------------------
+# Celery — async task queue
+# ---------------------------------------------------------------------------
+
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 600  # 10 minutes hard limit per task
+CELERY_TASK_SOFT_TIME_LIMIT = 540  # 9 minutes soft limit
+
+# ---------------------------------------------------------------------------
 # Misc
 # ---------------------------------------------------------------------------
 

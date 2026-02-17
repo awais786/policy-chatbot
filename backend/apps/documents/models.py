@@ -1,5 +1,8 @@
 """
 Document model for uploaded PDF files.
+
+Text extraction, chunking, and embedding generation are handled
+asynchronously by the Celery task `process_document` — NOT in save().
 """
 
 import logging
@@ -45,7 +48,10 @@ class Document(TimeStampedModel):
     file_hash = models.CharField(
         max_length=64, db_index=True, blank=True, default=""
     )
-    is_active = models.BooleanField(default=True, help_text="Mark as inactive to hide from normal operations")
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Mark as inactive to hide from normal operations",
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
@@ -53,6 +59,10 @@ class Document(TimeStampedModel):
         db_index=True,
     )
     error_message = models.TextField(blank=True, default="")
+    text_content = models.TextField(
+        blank=True, default="",
+        help_text="Extracted text from the PDF file (populated by async task)",
+    )
     metadata = models.JSONField(default=dict, blank=True)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -91,14 +101,41 @@ class Document(TimeStampedModel):
         return self.title
 
     def save(self, *args, **kwargs):
-        """Auto-compute file_hash when a new file is attached."""
-        file_field = self.file
-        if file_field and hasattr(file_field, "chunks"):
+        """
+        Compute file_hash on new uploads. Text extraction and embedding
+        generation are handled asynchronously — see tasks.process_document.
+        """
+        if self.file and hasattr(self.file, "chunks"):
             try:
-                self.file_hash = compute_file_hash(file_field)
+                self.file_hash = compute_file_hash(self.file)
             except Exception:
                 logger.exception("Failed to compute file hash for %s", self.title)
-        super().save(*args, **kwargs)
+
+        try:
+            super().save(*args, **kwargs)
+        except Exception as exc:
+            if "unique_document_per_org" in str(exc) and self.file_hash:
+                import time
+                self.file_hash = f"{self.file_hash}_{int(time.time())}"
+                logger.info(
+                    "Duplicate hash for %s, using unique variant: %s",
+                    self.title, self.file_hash,
+                )
+                super().save(*args, **kwargs)
+            else:
+                raise
+
+    def schedule_processing(self):
+        """
+        Dispatch the async processing pipeline (extract → chunk → embed).
+
+        Call this after a document is successfully saved with a file attached.
+        In development (CELERY_TASK_ALWAYS_EAGER=True) this runs synchronously.
+        """
+        from apps.documents.tasks import process_document
+
+        process_document.delay(str(self.pk))
+        logger.info("Scheduled processing for document %s (%s)", self.title, self.pk)
 
     @property
     def is_processed(self) -> bool:
@@ -106,13 +143,37 @@ class Document(TimeStampedModel):
 
     @property
     def chunk_count(self) -> int:
-        try:
-            return self.chunks.count()
-        except AttributeError:
-            return 0
+        """Return the number of text chunks for this document."""
+        return self.chunks.count()
 
 
-class DocumentEmbedding(TimeStampedModel):
-    document = models.ForeignKey(Document, on_delete=models.CASCADE, related_name="embeddings")
-    embedding = VectorField(dimensions=1536)
-    created_at = models.DateTimeField(auto_now_add=True)
+class DocumentChunk(TimeStampedModel):
+    """Text chunks from documents with vector embeddings for semantic search."""
+
+    document = models.ForeignKey(
+        Document, on_delete=models.CASCADE, related_name="chunks",
+    )
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="document_chunks",
+    )
+    content = models.TextField()
+    chunk_index = models.IntegerField()
+    embedding = VectorField(dimensions=1536, null=True, blank=True)
+
+    class Meta:
+        db_table = "document_chunks"
+        ordering = ["document", "chunk_index"]
+        indexes = [
+            models.Index(
+                fields=["document", "chunk_index"], name="idx_chunk_doc_index",
+            ),
+            models.Index(fields=["organization"], name="idx_chunk_org"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["document", "chunk_index"], name="unique_chunk_per_doc",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.document.title} - Chunk {self.chunk_index}"

@@ -73,3 +73,11 @@ DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 # Ensure media root exists when settings are imported in development
 import os
 os.makedirs(str(MEDIA_ROOT), exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Celery — run tasks synchronously in development (no worker needed)
+# ---------------------------------------------------------------------------
+
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+
