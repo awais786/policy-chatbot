@@ -1,0 +1,54 @@
+{
+  "todos": [
+    {
+      "id": "1",
+      "content": "Phase 1: Django project setup with config, apps, and pgvector",
+      "status": "completed"
+    },
+    {
+      "id": "2",
+      "content": "Phase 1: Create core models (Organization, User) and API key auth middleware",
+      "status": "completed"
+    },
+    {
+      "id": "3",
+      "content": "Phase 1: Document upload API with S3 integration",
+      "status": "completed"
+    },
+    {
+      "id": "4",
+      "content": "Phase 2: PDF extraction, chunking, embeddings pipeline",
+      "status": "pending"
+    },
+    {
+      "id": "5",
+      "content": "Phase 2: Store chunks in pgvector and track processing status",
+      "status": "pending"
+    },
+    {
+      "id": "6",
+      "content": "Phase 3: Implement pgvector semantic search",
+      "status": "pending"
+    },
+    {
+      "id": "7",
+      "content": "Phase 3: LLM integration (OpenAI/Anthropic) with prompts",
+      "status": "pending"
+    },
+    {
+      "id": "8",
+      "content": "Phase 4: Complete REST API, rate limiting, docs, tests",
+      "status": "pending"
+    },
+    {
+      "id": "9",
+      "content": "Phase 5: JavaScript embeddable widget with Shadow DOM",
+      "status": "pending"
+    },
+    {
+      "id": "10",
+      "content": "Phase 6: Docker, Terraform, AWS deployment",
+      "status": "pending"
+    }
+  ]
+}

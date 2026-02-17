@@ -1,0 +1,39 @@
+---
+description: Prevent creating multiple documentation files
+alwaysApply: true
+---
+
+# Documentation File Policy
+
+**IMPORTANT**: This project maintains a single documentation file. Do NOT create additional documentation files unless explicitly requested by the user.
+
+## Rules
+
+1. **Never proactively create** documentation files such as:
+   - README.md
+   - CONTRIBUTING.md
+   - CHANGELOG.md
+   - API.md
+   - GUIDE.md
+   - Any other .md files for documentation purposes
+
+2. **Only create documentation files when**:
+   - The user explicitly asks: "Create a README" or "Add a CONTRIBUTING.md"
+   - The user specifically requests documentation to be written
+
+3. **Default behavior**:
+   - Assume documentation already exists or isn't needed
+   - Focus on code implementation, not documentation
+   - If you think documentation would help, suggest it but don't create it
+
+## Examples
+
+```python
+# ❌ BAD - Don't do this automatically
+# After implementing a feature:
+# "I've also created a README.md to document the API..."
+
+# ✅ GOOD - Only suggest if relevant
+# "The implementation is complete. Would you like me to create 
+# documentation for the new API endpoints?"
+```

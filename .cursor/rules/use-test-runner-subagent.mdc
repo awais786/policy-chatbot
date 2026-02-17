@@ -1,0 +1,60 @@
+---
+description: Always use test-runner subagent for running tests
+alwaysApply: true
+---
+
+# Test Runner Subagent Usage
+
+**CRITICAL**: Always delegate test execution to the `test-runner` subagent.
+
+## When to Use the Test Runner Subagent
+
+Use the test-runner subagent for ANY test-related task:
+
+- Running unit tests
+- Running integration tests
+- Running Django test suite
+- Executing pytest
+- Generating coverage reports
+- Analyzing test failures
+- Summarizing test results
+
+## How to Use
+
+Instead of running test commands directly, delegate to the subagent:
+
+```python
+# ✅ GOOD - Delegate to test-runner subagent
+Use the test-runner subagent to run all Django tests and summarize results
+
+# ❌ BAD - Don't run tests directly
+python manage.py test
+```
+
+## Examples
+
+```python
+# Running all tests
+"Use the test-runner subagent to run all tests"
+
+# Running specific app tests
+"Use the test-runner subagent to run tests for the cart app"
+
+# Running with coverage
+"Use the test-runner subagent to run pytest with coverage and report missing tests"
+
+# Analyzing failures
+"Use the test-runner subagent to run failing tests and provide structured output"
+```
+
+## Benefits
+
+- Structured JSON output for easy parsing
+- Consistent test reporting format
+- Automatic failure analysis
+- Actionable recommendations
+- Machine-readable results
+
+## Exception
+
+Only run tests directly if the user explicitly requests a specific command to be executed verbatim.
