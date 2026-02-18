@@ -25,10 +25,11 @@ X_FRAME_OPTIONS = 'DENY'
 # ---------------------------------------------------------------------------
 
 import sentry_sdk  # noqa: E402
+import os  # noqa: E402
 from sentry_sdk.integrations.django import DjangoIntegration  # noqa: E402
 
 sentry_sdk.init(
-    dsn=env('SENTRY_DSN', default=''),  # noqa: F405
+    dsn=os.environ.get('SENTRY_DSN', ''),
     integrations=[DjangoIntegration()],
     traces_sample_rate=0.1,
     send_default_pii=False,
@@ -70,3 +71,42 @@ LOGGING = {
         },
     },
 }
+
+
+# ---------------------------------------------------------------------------
+# Embedding Configuration for Production
+# ---------------------------------------------------------------------------
+
+# Use OpenAI for production embeddings
+EMBEDDING_PROVIDER = 'openai'
+EMBEDDING_MODEL = 'text-embedding-3-small'
+EMBEDDING_DIMENSIONS = 1536
+
+# OpenAI API key should be set via environment variable
+# OPENAI_API_KEY should be provided via environment or secrets management
+
+# Embedding batch processing settings
+MAX_EMBEDDING_BATCH_SIZE = 2048
+
+# ---------------------------------------------------------------------------
+# Celery Configuration for Production
+# ---------------------------------------------------------------------------
+
+# Redis broker configuration
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://redis:6379/0')
+
+# Task configuration for production
+CELERY_TASK_ALWAYS_EAGER = False
+CELERY_TASK_EAGER_PROPAGATES = False
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 900  # 15 minutes hard limit
+CELERY_TASK_SOFT_TIME_LIMIT = 720  # 12 minutes soft limit
+
+# Worker configuration
+CELERY_WORKER_CONCURRENCY = 4
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000

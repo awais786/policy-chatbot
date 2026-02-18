@@ -73,3 +73,21 @@ DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 # Ensure media root exists when settings are imported in development
 import os
 os.makedirs(str(MEDIA_ROOT), exist_ok=True)
+
+# ---------------------------------------------------------------------------
+# Celery — run tasks synchronously in development (no worker needed)
+# ---------------------------------------------------------------------------
+
+CELERY_TASK_ALWAYS_EAGER = True
+CELERY_TASK_EAGER_PROPAGATES = True
+
+# ---------------------------------------------------------------------------
+# Embeddings — use local Ollama in development (free, no API key needed)
+# Run: ollama pull nomic-embed-text
+# ---------------------------------------------------------------------------
+
+EMBEDDING_PROVIDER = 'ollama'
+OLLAMA_BASE_URL = 'http://localhost:11434'
+OLLAMA_EMBEDDING_MODEL = 'nomic-embed-text'
+EMBEDDING_DIMENSIONS = 768  # nomic-embed-text outputs 768-dim vectors
+

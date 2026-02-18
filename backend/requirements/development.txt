@@ -1,5 +1,10 @@
 -r base.txt
 
+# Local Development Notes:
+# - Hugging Face: sentence-transformers (included in base.txt) for offline embeddings
+# - Ollama: No additional packages needed, uses langchain-community (in base.txt)
+# - All LangChain chat history components included in base.txt via langchain-core
+
 # Testing
 pytest>=7.4,<7.5
 pytest-django>=4.7,<4.8

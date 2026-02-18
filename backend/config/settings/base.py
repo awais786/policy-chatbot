@@ -43,6 +43,7 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     'apps.core',
     'apps.documents',
+    'apps.chatbot',
     'apps.widget',
 ]
 
@@ -222,8 +223,20 @@ MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 ALLOWED_DOCUMENT_TYPES = ['application/pdf']
 CHUNK_SIZE = 1000  # tokens
 CHUNK_OVERLAP = 200  # tokens
+
+# ---------------------------------------------------------------------------
+# Embedding provider — "ollama" (local) or "openai" (cloud)
+# ---------------------------------------------------------------------------
+
+EMBEDDING_PROVIDER = os.environ.get('EMBEDDING_PROVIDER', 'openai')
+
+# OpenAI settings (used when EMBEDDING_PROVIDER = "openai")
 EMBEDDING_MODEL = os.environ.get('EMBEDDING_MODEL', 'text-embedding-3-small')
-EMBEDDING_DIMENSIONS = 1536
+EMBEDDING_DIMENSIONS = int(os.environ.get('EMBEDDING_DIMENSIONS', '1536'))
+
+# Ollama settings (used when EMBEDDING_PROVIDER = "ollama")
+OLLAMA_BASE_URL = os.environ.get('OLLAMA_BASE_URL', 'http://localhost:11434')
+OLLAMA_EMBEDDING_MODEL = os.environ.get('OLLAMA_EMBEDDING_MODEL', 'nomic-embed-text')
 
 # ---------------------------------------------------------------------------
 # LLM defaults
@@ -240,6 +253,20 @@ DEFAULT_LLM_MAX_TOKENS = 1000
 
 DEFAULT_TOP_K = 5
 DEFAULT_SIMILARITY_THRESHOLD = 0.7
+
+# ---------------------------------------------------------------------------
+# Celery — async task queue
+# ---------------------------------------------------------------------------
+
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 600  # 10 minutes hard limit per task
+CELERY_TASK_SOFT_TIME_LIMIT = 540  # 9 minutes soft limit
 
 # ---------------------------------------------------------------------------
 # Misc
