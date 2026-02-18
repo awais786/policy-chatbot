@@ -23,14 +23,19 @@ python-magic>=0.4,<0.5
 
 # Text Processing and Embeddings
 langchain>=0.1,<0.2
-langchain-openai>=0.0.5,<0.1
+langchain-core>=1.0,<2.0
 langchain-community>=0.0.10,<0.1
+langchain-openai>=0.0.5,<0.1
 tiktoken>=0.5,<0.6
 sentence-transformers>=2.3,<2.4
 
-# LLM Providers
+# LLM Providers (OpenAI for production, Ollama for local)
 openai>=1.10,<1.11
 anthropic>=0.8,<0.9
+
+# Chat History and Conversation Management (LangChain)
+# langchain-core provides: BaseChatMessageHistory, RunnableWithMessageHistory,
+# ChatPromptTemplate, MessagesPlaceholder, HumanMessage, AIMessage
 
 # Authentication and Security
 pyjwt>=2.8,<2.9

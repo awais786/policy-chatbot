@@ -10,9 +10,27 @@ from typing import Any, List, Optional, Dict
 
 from django.conf import settings
 
-from apps.chatbot.services.chat_history import get_chat_history
+from apps.chatbot.services.chat_history import (
+    get_session_history_for_langchain,
+    add_user_message,
+    add_ai_message,
+    get_recent_messages
+)
 
 logger = logging.getLogger(__name__)
+
+# Import LangChain components for proper chat history
+try:
+    from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+    from langchain_core.runnables.history import RunnableWithMessageHistory
+    from langchain_core.output_parsers import StrOutputParser
+    LANGCHAIN_HISTORY_AVAILABLE = True
+except ImportError:
+    ChatPromptTemplate = None
+    MessagesPlaceholder = None
+    RunnableWithMessageHistory = None
+    StrOutputParser = None
+    LANGCHAIN_HISTORY_AVAILABLE = False
 
 # Import only what we need for OpenAI and Ollama
 try:
@@ -112,6 +130,48 @@ class RAGChatbot:
         self.llm_provider = LLMProvider()
         self.prompt_template = self._get_prompt_template()
         self.history_enabled = getattr(settings, 'CHATBOT_ENABLE_CHAT_HISTORY', True)
+        self.conversation_chain = self._create_conversation_chain()
+
+    def _create_conversation_chain(self):
+        """Create LangChain conversation chain with message history."""
+        if not self.history_enabled or not LANGCHAIN_HISTORY_AVAILABLE:
+            return None
+
+        try:
+            # Create chat prompt template with message history placeholder
+            prompt = ChatPromptTemplate.from_messages([
+                ("system", """You are a knowledgeable assistant helping users find information from documents.
+
+**Instructions:**
+1. Answer ONLY using information from the context below
+2. Consider the conversation history for context, but base your answer on the provided documents
+3. If the context contains the answer, provide a clear response
+4. Cite the source document when possible
+5. If the context doesn't contain enough information, say "I don't have enough information to answer that question."
+6. Be concise but complete
+
+**Context:**
+{context}"""),
+                MessagesPlaceholder(variable_name="history"),
+                ("human", "{input}")
+            ])
+
+            # Create the chain: prompt -> LLM -> output parser
+            chain = prompt | self.llm_provider.llm | StrOutputParser()
+
+            # Wrap with message history
+            conversation_chain = RunnableWithMessageHistory(
+                chain,
+                get_session_history_for_langchain,
+                input_messages_key="input",
+                history_messages_key="history",
+            )
+
+            return conversation_chain
+
+        except Exception as e:
+            logger.error(f"Failed to create LangChain conversation chain: {e}")
+            return None
 
     def _get_prompt_template(self) -> str:
         """Get prompt template from settings."""
@@ -171,28 +231,90 @@ class RAGChatbot:
 
         return truncated + "..."
 
-    def _build_prompt_with_history(self, question: str, context: str, session_id: str = None) -> str:
-        """Build prompt including chat history if enabled and session_id provided."""
-        if not self.history_enabled or not session_id:
-            # No history - use simple prompt
-            return self.prompt_template.format(context=context, question=question)
+    def generate_answer(self, question: str, search_results: List[Dict], session_id: str = None) -> Dict[str, Any]:
+        """Generate answer using search results and LLM, optionally maintaining chat history."""
+        try:
+            # Format context from search results
+            context = self._format_context_from_search_results(search_results)
+            context = self._truncate_context(context)
 
-        # Get chat history for this session
-        chat_history = get_chat_history(session_id)
-        recent_messages = chat_history.get_recent_messages(count=6)  # Get last 6 messages
+            # Use LangChain conversation chain if available and session provided
+            if self.conversation_chain and session_id and self.history_enabled:
+                try:
+                    # Use the LangChain conversation chain with message history
+                    answer = self.conversation_chain.invoke(
+                        {"input": question, "context": context},
+                        config={"configurable": {"session_id": session_id}}
+                    )
 
-        # Build conversation context
-        if recent_messages:
-            conversation_context = "\n**Previous conversation:**\n"
-            for msg in recent_messages:
-                role = "User" if msg["type"] == "user" else "Assistant"
-                conversation_context += f"{role}: {msg['content']}\n"
-            conversation_context += "\n"
-        else:
-            conversation_context = ""
+                    return {
+                        "answer": answer,
+                        "sources_used": len(search_results),
+                        "context_length": len(context),
+                        "provider": self.llm_provider.provider_type,
+                        "model": self.llm_provider.model,
+                        "history_enabled": True,
+                        "langchain_used": True
+                    }
 
-        # Enhanced prompt template with history
-        history_prompt = f"""You are a knowledgeable assistant helping users find information from documents.
+                except Exception as e:
+                    logger.error(f"LangChain conversation failed, falling back to simple generation: {e}")
+                    # Fall through to simple generation
+
+            # Fallback: Simple prompt generation without conversation history
+            if session_id:
+                # Build prompt with manual history for fallback
+                prompt = self._build_prompt_with_manual_history(question, context, session_id)
+            else:
+                # Simple prompt without history
+                prompt = self.prompt_template.format(context=context, question=question)
+
+            # Generate response using LLM
+            answer = self.llm_provider.generate_response(prompt)
+
+            # Manually store in chat history if session provided
+            if session_id and self.history_enabled:
+                add_user_message(session_id, question)
+                add_ai_message(session_id, answer)
+
+            return {
+                "answer": answer,
+                "sources_used": len(search_results),
+                "context_length": len(context),
+                "provider": self.llm_provider.provider_type,
+                "model": self.llm_provider.model,
+                "history_enabled": bool(session_id and self.history_enabled),
+                "langchain_used": False
+            }
+
+        except Exception as e:
+            logger.error(f"Answer generation failed: {e}")
+            return {
+                "answer": "I'm sorry, I encountered an error while generating the response. Please try again.",
+                "error": str(e),
+                "sources_used": 0,
+                "context_length": 0,
+                "history_enabled": False,
+                "langchain_used": False
+            }
+
+    def _build_prompt_with_manual_history(self, question: str, context: str, session_id: str) -> str:
+        """Build prompt with manual history retrieval (fallback method)."""
+        try:
+            # Get recent messages for context
+            recent_messages = get_recent_messages(session_id, count=6)
+
+            if recent_messages:
+                conversation_context = "\n**Previous conversation:**\n"
+                for msg in recent_messages:
+                    role = "User" if msg["type"] == "user" else "Assistant"
+                    conversation_context += f"{role}: {msg['content']}\n"
+                conversation_context += "\n"
+            else:
+                conversation_context = ""
+
+            # Build enhanced prompt with history
+            return f"""You are a knowledgeable assistant helping users find information from documents.
 
 {conversation_context}**Instructions:**
 1. Answer ONLY using information from the context below
@@ -210,45 +332,10 @@ class RAGChatbot:
 
 **Answer:**"""
 
-        return history_prompt
-
-    def generate_answer(self, question: str, search_results: List[Dict], session_id: str = None) -> Dict[str, Any]:
-        """Generate answer using search results and LLM, optionally maintaining chat history."""
-        try:
-            # Format context from search results
-            context = self._format_context_from_search_results(search_results)
-            context = self._truncate_context(context)
-
-            # Create prompt (with or without history)
-            prompt = self._build_prompt_with_history(question, context, session_id)
-
-            # Generate response
-            answer = self.llm_provider.generate_response(prompt)
-
-            # Store in chat history if enabled
-            if self.history_enabled and session_id:
-                chat_history = get_chat_history(session_id)
-                chat_history.add_message(question, "user")
-                chat_history.add_message(answer, "assistant")
-
-            return {
-                "answer": answer,
-                "sources_used": len(search_results),
-                "context_length": len(context),
-                "provider": self.llm_provider.provider_type,
-                "model": self.llm_provider.model,
-                "history_enabled": self.history_enabled and bool(session_id)
-            }
-
         except Exception as e:
-            logger.error(f"Answer generation failed: {e}")
-            return {
-                "answer": "I'm sorry, I encountered an error while generating the response. Please try again.",
-                "error": str(e),
-                "sources_used": 0,
-                "context_length": 0,
-                "history_enabled": False
-            }
+            logger.error(f"Failed to build prompt with manual history: {e}")
+            # Fallback to simple prompt
+            return self.prompt_template.format(context=context, question=question)
 
 
 def get_llm_provider(provider_type: str = None, model: str = None) -> LLMProvider:

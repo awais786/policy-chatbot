@@ -1,5 +1,9 @@
 -r base.txt
 
+# Production LLM Configuration:
+# - OpenAI: langchain-openai (included in base.txt) for production embeddings & chat
+# - All LangChain chat history components included via langchain-core in base.txt
+
 # Production Server
 gunicorn>=21.2,<21.3
 

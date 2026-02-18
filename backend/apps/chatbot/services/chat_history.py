@@ -1,142 +1,147 @@
 """
-In-memory chat history management for the chatbot.
+LangChain-based chat history management for the chatbot.
 
-Provides simple in-memory chat history storage without database persistence.
-Chat sessions are maintained in memory only and are lost when the server restarts.
+Uses LangChain's ChatMessageHistory and RunnableWithMessageHistory
+for proper conversation management.
 """
 
 import logging
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
+from typing import Dict, Optional
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+try:
+    from langchain_core.chat_history import BaseChatMessageHistory
+    from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+    from langchain_core.runnables.history import RunnableWithMessageHistory
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    BaseChatMessageHistory = None
+    BaseMessage = None
+    HumanMessage = None
+    AIMessage = None
+    RunnableWithMessageHistory = None
+    LANGCHAIN_AVAILABLE = False
+    logger.warning("LangChain components not available, falling back to simple storage")
 
-class InMemoryChatHistory:
-    """Simple in-memory chat history storage."""
 
-    def __init__(self, session_id: str, max_messages: int = 20):
+class LangChainChatMessageHistory(BaseChatMessageHistory):
+    """LangChain-compatible chat message history that stores messages in memory."""
+
+    def __init__(self, session_id: str):
         self.session_id = session_id
-        self.messages: List[Dict] = []
-        self.max_messages = max_messages
+        self.messages: list[BaseMessage] = []
         self.created_at = datetime.now()
         self.last_activity = datetime.now()
 
-    def add_message(self, message: str, message_type: str = "user") -> None:
-        """Add a message to the history."""
-        self.messages.append({
-            "content": message,
-            "type": message_type,
-            "timestamp": datetime.now()
-        })
+    def add_message(self, message: BaseMessage) -> None:
+        """Add a message to the store"""
+        self.messages.append(message)
         self.last_activity = datetime.now()
 
-        # Keep only the most recent messages to prevent memory bloat
-        if len(self.messages) > self.max_messages:
-            self.messages = self.messages[-self.max_messages:]
-
-    def get_recent_messages(self, count: int = 10) -> List[Dict]:
-        """Get the most recent messages."""
-        return self.messages[-count:] if count > 0 else self.messages
-
     def clear(self) -> None:
-        """Clear the chat history."""
+        """Clear all messages from the store"""
         self.messages.clear()
 
-    def is_expired(self, max_age_hours: int = 24) -> bool:
-        """Check if the session has expired."""
-        return datetime.now() - self.last_activity > timedelta(hours=max_age_hours)
 
+class LangChainSessionStore:
+    """Manages LangChain chat message histories for different sessions."""
 
-class InMemoryChatStore:
-    """Manages in-memory chat histories for different sessions."""
-
-    def __init__(self, max_sessions: int = 1000, cleanup_interval_minutes: int = 60):
-        self.sessions: Dict[str, InMemoryChatHistory] = {}
+    def __init__(self, max_sessions: int = 1000):
+        self.store: Dict[str, LangChainChatMessageHistory] = {}
         self.max_sessions = max_sessions
-        self.cleanup_interval_minutes = cleanup_interval_minutes
-        self.last_cleanup = datetime.now()
 
-    def get_session_history(self, session_id: str) -> InMemoryChatHistory:
-        """Get or create chat history for a session."""
-        # Perform periodic cleanup
-        self._cleanup_expired_sessions()
-
-        if session_id not in self.sessions:
-            # Create new session if we haven't hit the limit
-            if len(self.sessions) >= self.max_sessions:
+    def get_session_history(self, session_id: str) -> LangChainChatMessageHistory:
+        """Get or create a chat message history for a session."""
+        if session_id not in self.store:
+            if len(self.store) >= self.max_sessions:
                 # Remove oldest session to make room
                 oldest_session_id = min(
-                    self.sessions.keys(),
-                    key=lambda k: self.sessions[k].last_activity
+                    self.store.keys(),
+                    key=lambda k: self.store[k].last_activity
                 )
-                del self.sessions[oldest_session_id]
+                del self.store[oldest_session_id]
                 logger.info(f"Removed oldest session {oldest_session_id} to make room")
 
-            self.sessions[session_id] = InMemoryChatHistory(session_id)
-            logger.info(f"Created new chat session: {session_id}")
+            self.store[session_id] = LangChainChatMessageHistory(session_id)
+            logger.info(f"Created new LangChain chat session: {session_id}")
 
-        return self.sessions[session_id]
+        return self.store[session_id]
 
     def clear_session(self, session_id: str) -> bool:
         """Clear history for a specific session."""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
-            logger.info(f"Cleared chat session: {session_id}")
+        if session_id in self.store:
+            del self.store[session_id]
+            logger.info(f"Cleared LangChain chat session: {session_id}")
             return True
         return False
 
-    def _cleanup_expired_sessions(self, max_age_hours: int = 24) -> None:
-        """Remove expired sessions to prevent memory bloat."""
-        now = datetime.now()
-
-        # Only run cleanup if enough time has passed
-        if now - self.last_cleanup < timedelta(minutes=self.cleanup_interval_minutes):
-            return
-
-        expired_sessions = [
-            session_id for session_id, history in self.sessions.items()
-            if history.is_expired(max_age_hours)
-        ]
-
-        for session_id in expired_sessions:
-            del self.sessions[session_id]
-
-        if expired_sessions:
-            logger.info(f"Cleaned up {len(expired_sessions)} expired chat sessions")
-
-        self.last_cleanup = now
-
-    def get_session_count(self) -> int:
-        """Get the current number of active sessions."""
-        return len(self.sessions)
-
     def get_stats(self) -> Dict:
-        """Get statistics about the chat store."""
-        total_messages = sum(len(hist.messages) for hist in self.sessions.values())
+        """Get statistics about the session store."""
+        total_messages = sum(len(hist.messages) for hist in self.store.values())
         return {
-            "active_sessions": len(self.sessions),
+            "active_sessions": len(self.store),
             "total_messages": total_messages,
             "max_sessions": self.max_sessions,
-            "last_cleanup": self.last_cleanup
+            "langchain_enabled": LANGCHAIN_AVAILABLE,
+            "last_updated": datetime.now()
         }
 
 
-# Global in-memory chat store instance
-_chat_store = InMemoryChatStore()
+# Global LangChain session store instance
+_langchain_store = LangChainSessionStore() if LANGCHAIN_AVAILABLE else None
 
 
-def get_chat_history(session_id: str) -> InMemoryChatHistory:
+def get_session_history_for_langchain(session_id: str) -> LangChainChatMessageHistory:
     """
-    Get chat history for a session.
+    Get LangChain-compatible chat history for a session.
+    This function signature is required by RunnableWithMessageHistory.
 
     Args:
         session_id: Unique identifier for the chat session
 
     Returns:
-        InMemoryChatHistory instance for the session
+        LangChainChatMessageHistory instance for the session
     """
-    return _chat_store.get_session_history(session_id)
+    if not LANGCHAIN_AVAILABLE or not _langchain_store:
+        raise RuntimeError("LangChain components not available")
+
+    return _langchain_store.get_session_history(session_id)
+
+
+def add_user_message(session_id: str, message: str) -> None:
+    """Add a user message to the chat history."""
+    if not LANGCHAIN_AVAILABLE or not _langchain_store:
+        logger.warning("LangChain not available, message not stored")
+        return
+
+    history = _langchain_store.get_session_history(session_id)
+    history.add_message(HumanMessage(content=message))
+
+
+def add_ai_message(session_id: str, message: str) -> None:
+    """Add an AI message to the chat history."""
+    if not LANGCHAIN_AVAILABLE or not _langchain_store:
+        logger.warning("LangChain not available, message not stored")
+        return
+
+    history = _langchain_store.get_session_history(session_id)
+    history.add_message(AIMessage(content=message))
+
+
+def get_chat_store_stats() -> Dict:
+    """Get statistics about the LangChain chat store."""
+    if not LANGCHAIN_AVAILABLE or not _langchain_store:
+        return {
+            "active_sessions": 0,
+            "total_messages": 0,
+            "max_sessions": 0,
+            "langchain_enabled": False,
+            "error": "LangChain components not available"
+        }
+
+    return _langchain_store.get_stats()
 
 
 def clear_chat_history(session_id: str) -> bool:
@@ -149,9 +154,42 @@ def clear_chat_history(session_id: str) -> bool:
     Returns:
         True if session was found and cleared, False otherwise
     """
-    return _chat_store.clear_session(session_id)
+    if not LANGCHAIN_AVAILABLE or not _langchain_store:
+        return False
+
+    return _langchain_store.clear_session(session_id)
 
 
-def get_chat_store_stats() -> Dict:
-    """Get statistics about the in-memory chat store."""
-    return _chat_store.get_stats()
+def get_recent_messages(session_id: str, count: int = 10) -> list:
+    """
+    Get recent messages from a session for display purposes.
+
+    Returns messages in a simple format for inspection.
+    """
+    if not LANGCHAIN_AVAILABLE or not _langchain_store:
+        return []
+
+    try:
+        history = _langchain_store.get_session_history(session_id)
+        messages = history.messages[-count:] if count > 0 else history.messages
+
+        # Convert LangChain messages to simple dict format for display
+        result = []
+        for msg in messages:
+            if isinstance(msg, HumanMessage):
+                msg_type = "user"
+            elif isinstance(msg, AIMessage):
+                msg_type = "assistant"
+            else:
+                msg_type = "system"
+
+            result.append({
+                "content": msg.content,
+                "type": msg_type,
+                "timestamp": datetime.now()  # LangChain messages don't have timestamps by default
+            })
+
+        return result
+    except Exception as e:
+        logger.error(f"Error getting recent messages for session {session_id}: {e}")
+        return []
