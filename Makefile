@@ -41,7 +41,7 @@ setup: install-deps setup-db migrate
 install-deps:
 	@echo "📦 Installing Python dependencies..."
 	pip install --upgrade pip
-	pip install -r requirements/development.txt
+	pip install -r backend/requirements/development.txt
 	@echo "✅ Dependencies installed!"
 
 # Setup PostgreSQL database with pgvector
@@ -100,16 +100,14 @@ test-search:
 	@echo "🔍 Testing semantic search functionality..."
 	@echo ""
 	@echo "Testing search for 'meezan bank':"
-	curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-d '{"query": "meezan bank", "limit": 3, "min_similarity": 0.3}' \
-		| python -m json.tool
+		-d '{"query": "meezan bank", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
 	@echo ""
 	@echo "Testing search for 'traffic fine':"
-	curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-d '{"query": "traffic fine", "limit": 3, "min_similarity": 0.3}' \
-		| python -m json.tool
+		-d '{"query": "traffic fine", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
 	@echo ""
 
 # Test chat functionality with LangChain
@@ -117,25 +115,22 @@ test-chat:
 	@echo "💬 Testing LangChain chat functionality..."
 	@echo ""
 	@echo "Question 1: What is MEEZAN BANK?"
-	curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-d '{"message": "What is MEEZAN BANK?", "session_id": "makefile-test", "include_sources": true}' \
-		| python -m json.tool
+		-d '{"message": "What is MEEZAN BANK?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Question 2 (Follow-up): What was the fine amount?"
-	curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-d '{"message": "What was the fine amount?", "session_id": "makefile-test", "include_sources": true}' \
-		| python -m json.tool
+		-d '{"message": "What was the fine amount?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Question 3 (Follow-up): What happens if I dont pay the traffic fine?"
-	curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-d '{"message": "What happens if I dont pay the traffic fine?", "session_id": "makefile-test", "include_sources": true}' \
-		| python -m json.tool
+		-d '{"message": "What happens if I dont pay the traffic fine?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Checking LangChain session stats:"
-	curl -X GET http://127.0.0.1:8000/api/v1/chat/stats/ | python -m json.tool
+	@curl -X GET http://127.0.0.1:8000/api/v1/chat/stats/ | python3 -m json.tool
 
 # Django management commands
 createuser:
@@ -160,8 +155,8 @@ clean:
 
 requirements:
 	@echo "📝 Updating requirements files..."
-	pip freeze > requirements/current-env.txt
-	@echo "✅ Current environment saved to requirements/current-env.txt"
+	pip freeze > backend/requirements/current-env.txt
+	@echo "✅ Current environment saved to backend/requirements/current-env.txt"
 
 # Development workflow commands
 fresh-start: clean setup-db migrate
@@ -169,7 +164,7 @@ fresh-start: clean setup-db migrate
 
 quick-test:
 	@echo "⚡ Quick system test..."
-	@curl -s http://127.0.0.1:8000/api/v1/chat/health/ | python -m json.tool
+	@curl -s http://127.0.0.1:8000/api/v1/chat/health/ | python3 -m json.tool
 
 # Database inspection
 inspect-db:
