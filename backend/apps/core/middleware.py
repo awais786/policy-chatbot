@@ -7,6 +7,8 @@ and attaches it to the request.
 
 from django.http import JsonResponse
 
+from apps.core.models import Organization
+
 
 class APIKeyAuthMiddleware:
     """Authenticate requests via X-API-Key header.
@@ -34,8 +36,6 @@ class APIKeyAuthMiddleware:
         api_key = request.META.get("HTTP_X_API_KEY")
 
         if api_key:
-            # Lazy import to avoid circular imports at module level.
-            from apps.core.models import Organization
 
             try:
                 request.organization = Organization.objects.get(

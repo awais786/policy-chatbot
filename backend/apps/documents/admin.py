@@ -6,6 +6,7 @@ from django.contrib import admin, messages
 from django.utils.html import format_html
 
 from apps.documents.models import Document, DocumentChunk
+from apps.documents.tasks import generate_embeddings_for_document
 
 
 class EmbeddingStatusFilter(admin.SimpleListFilter):
@@ -173,7 +174,6 @@ class DocumentAdmin(admin.ModelAdmin):
     @admin.action(description="Generate embeddings for selected documents")
     def generate_embeddings_for_documents(self, request, queryset):
         """Trigger embedding generation for documents that have chunks but missing embeddings."""
-        from apps.documents.tasks import generate_embeddings_for_document
 
         scheduled_count = 0
         already_have_embeddings = 0
@@ -322,7 +322,6 @@ class DocumentChunkAdmin(admin.ModelAdmin):
             return
 
         # Schedule embedding generation for each document that has chunks needing embeddings
-        from apps.documents.tasks import generate_embeddings_for_document
         scheduled_count = 0
 
         for document in documents_to_process:

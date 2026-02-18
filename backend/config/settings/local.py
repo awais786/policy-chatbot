@@ -110,7 +110,7 @@ EMBEDDING_DIMENSIONS = 384  # all-MiniLM-L6-v2 generates 384-dimensional vectors
 # EMBEDDING_PROVIDER = 'ollama'
 # OLLAMA_BASE_URL = 'http://localhost:11434'
 # OLLAMA_EMBEDDING_MODEL = 'nomic-embed-text'
-# EMBEDDING_DIMENSIONS = 768
+# EMBEDDING_DIMENSIONS = 384
 
 # Alternative: Use OpenAI (requires API key)
 # EMBEDDING_PROVIDER = 'openai'

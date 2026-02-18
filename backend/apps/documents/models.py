@@ -14,6 +14,9 @@ from django.db.models import CASCADE, SET_NULL
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+# Import moved to avoid circular imports - will be imported when needed
+# from apps.documents.tasks import process_document
+
 from apps.core.models import Organization, TimeStampedModel
 from apps.documents.services.storage import document_upload_path
 from pgvector.django import VectorField
@@ -106,6 +109,7 @@ class Document(TimeStampedModel):
         In development (CELERY_TASK_ALWAYS_EAGER=True) this runs synchronously.
         """
         try:
+            # Import here to avoid circular imports (tasks.py imports models.py)
             from apps.documents.tasks import process_document
             process_document.delay(str(self.pk))
             logger.info("Scheduled processing for document %s (%s)", self.title, self.pk)

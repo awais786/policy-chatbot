@@ -10,6 +10,8 @@ from typing import Any, List, Optional, Dict
 
 from django.conf import settings
 
+from apps.chatbot.services.chat_history import get_chat_history
+
 logger = logging.getLogger(__name__)
 
 # Import only what we need for OpenAI and Ollama
@@ -176,7 +178,6 @@ class RAGChatbot:
             return self.prompt_template.format(context=context, question=question)
 
         # Get chat history for this session
-        from apps.chatbot.services.chat_history import get_chat_history
         chat_history = get_chat_history(session_id)
         recent_messages = chat_history.get_recent_messages(count=6)  # Get last 6 messages
 
@@ -226,7 +227,6 @@ class RAGChatbot:
 
             # Store in chat history if enabled
             if self.history_enabled and session_id:
-                from apps.chatbot.services.chat_history import get_chat_history
                 chat_history = get_chat_history(session_id)
                 chat_history.add_message(question, "user")
                 chat_history.add_message(answer, "assistant")

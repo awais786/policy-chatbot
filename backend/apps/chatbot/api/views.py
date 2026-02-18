@@ -16,7 +16,8 @@ from apps.chatbot.api.serializers import (
     ChatResponseSerializer,
 )
 from apps.chatbot.services.search import VectorSearchService
-from apps.chatbot.models import SearchQuery
+from apps.chatbot.services.providers import create_rag_chatbot
+from apps.chatbot.services.chat_history import get_chat_store_stats
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ def search_documents(request):
     }
     """
     # TODO: Get organization from request authentication
-    organization_id = "44e5dfd8-1d6d-4229-a151-02f37baea1d5"  # Temporary hardcode
+    organization_id = "dcbd2e32-923b-420d-a58a-c6523da4af6d"  # Actual organization_id from database
 
     # Validate request data
     serializer = SearchRequestSerializer(data=request.data)
@@ -55,15 +56,7 @@ def search_documents(request):
             min_similarity=min_similarity
         )
 
-        # Log search query for analytics
-        SearchQuery.objects.create(
-            organization_id=organization_id,
-            query_text=query,
-            results_count=len(results),
-            user=request.user if request.user.is_authenticated else None,
-        )
-
-        # Format response
+        # Format response - no database logging needed
         response_data = {
             "query": query,
             "results_count": len(results),
@@ -94,7 +87,7 @@ def chat_with_documents(request):
     }
     """
     # TODO: Get organization from request authentication
-    organization_id = "44e5dfd8-1d6d-4229-a151-02f37baea1d5"  # Temporary hardcode
+    organization_id = "dcbd2e32-923b-420d-a58a-c6523da4af6d"  # Actual organization_id from database
 
     # Validate request data
     serializer = ChatRequestSerializer(data=request.data)
@@ -111,24 +104,15 @@ def chat_with_documents(request):
         search_results = search_service.search(
             query=user_message,
             limit=5,
-            min_similarity=0.7
+            min_similarity=0.3
         )
 
         # Generate answer using RAG chatbot with session history
-        from apps.chatbot.services.providers import create_rag_chatbot
         chatbot = create_rag_chatbot(organization_id)
 
         result = chatbot.generate_answer(user_message, search_results, session_id)
 
-        # Log search query for analytics (without persisting session)
-        SearchQuery.objects.create(
-            organization_id=organization_id,
-            query_text=user_message,
-            results_count=len(search_results),
-            user=request.user if request.user.is_authenticated else None,
-            session_id=session_id,  # Track session ID for analytics only
-        )
-
+        # No database logging needed - just return the response
         response_data = {
             "session_id": session_id,
             "message": result["answer"],
@@ -156,7 +140,6 @@ def chat_with_documents(request):
 @permission_classes([AllowAny])
 def chat_stats(request):
     """Get statistics about in-memory chat sessions."""
-    from apps.chatbot.services.chat_history import get_chat_store_stats
 
     try:
         stats = get_chat_store_stats()

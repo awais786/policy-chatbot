@@ -10,6 +10,15 @@ import logging
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
+from django.db import transaction, connection
+
+from apps.documents.models import Document, DocumentChunk
+from apps.documents.services.pdf_extractor import (
+    PDFExtractionError,
+    extract_text_from_file,
+)
+from apps.documents.services.text_chunker import chunk_text
+from apps.documents.services.embeddings import generate_embeddings, EmbeddingError
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +47,7 @@ def process_document(self, document_id: str) -> dict:
         dict with processing summary.
     """
     try:
-        from apps.documents.models import Document, DocumentChunk
-        from apps.documents.services.pdf_extractor import (
-            PDFExtractionError,
-            extract_text_from_file,
-        )
-        from apps.documents.services.text_chunker import chunk_text
-        from django.db import transaction
-    except Exception as exc:
-        logger.exception("Failed to import required modules")
-        return {"status": "error", "detail": f"Import error: {exc}"}
-
-    try:
+        # Validate that the document exists and has a file
         document = Document.objects.get(pk=document_id)
     except Document.DoesNotExist:
         logger.error("Document %s not found, skipping.", document_id)
@@ -189,13 +187,6 @@ def generate_embeddings_for_document(self, document_id: str) -> dict:
     Returns:
         dict with embedding generation summary.
     """
-    try:
-        from apps.documents.models import Document, DocumentChunk
-        from apps.documents.services.embeddings import generate_embeddings, EmbeddingError
-        from django.db import transaction
-    except Exception as exc:
-        logger.exception("Failed to import required modules for embedding generation")
-        return {"status": "error", "detail": f"Import error: {exc}"}
 
     try:
         document = Document.objects.get(pk=document_id)
@@ -251,7 +242,6 @@ def generate_embeddings_for_document(self, document_id: str) -> dict:
             logger.info("Retrying embedding generation for document %s (attempt %d/%d)",
                        document.title, self.request.retries + 1, self.max_retries)
             # Close any open database connections to avoid transaction issues
-            from django.db import connection
             connection.close()
             raise self.retry(countdown=self.default_retry_delay, exc=exc)
         else:
@@ -265,7 +255,6 @@ def generate_embeddings_for_document(self, document_id: str) -> dict:
     except Exception as exc:
         logger.exception("Unexpected error during embedding generation for document %s", document.title)
         # Close any open database connections to avoid transaction issues
-        from django.db import connection
         connection.close()
         return {
             "status": "error",
