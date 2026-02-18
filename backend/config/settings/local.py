@@ -115,3 +115,41 @@ EMBEDDING_DIMENSIONS = 384  # all-MiniLM-L6-v2 generates 384-dimensional vectors
 # Alternative: Use OpenAI (requires API key)
 # EMBEDDING_PROVIDER = 'openai'
 # OPENAI_API_KEY = 'your-openai-api-key-here'
+
+# ---------------------------------------------------------------------------
+# Chatbot Configuration
+# ---------------------------------------------------------------------------
+
+# LLM Provider Settings
+CHATBOT_LLM_PROVIDER = 'ollama'  # or 'openai'
+CHATBOT_LLM_MODEL = 'mistral'    # Model name for the LLM provider
+
+# Chat History Settings
+CHATBOT_ENABLE_CHAT_HISTORY = True
+CHATBOT_CHAT_HISTORY_RECENT_MESSAGES = 6
+
+# Context and Response Settings
+CHATBOT_MAX_CONTEXT_CHARS = 8000  # Maximum characters in context sent to LLM
+CHATBOT_MAX_SEARCH_RESULTS = 5    # Number of search results to include in context
+
+# Prompt Templates
+CHATBOT_PROMPT_TEMPLATE = """You are a knowledgeable assistant helping users find information from documents. Your goal is to provide accurate, helpful answers based strictly on the provided context.
+
+**Instructions:**
+1. Answer ONLY using information explicitly stated in the context below
+2. If the context contains the answer, provide a clear, well-structured response
+3. Cite the source document when providing information (e.g., "According to [Document Title]...")
+4. If the context does NOT contain enough information to answer the question, respond with: "I don't have enough information in the available content to answer that question."
+5. Be concise but complete - prioritize clarity over brevity
+6. If the question has multiple parts, address each part separately
+7. Do not make assumptions or add information not present in the context
+
+**Context:**
+{context}
+
+**Question:**
+{question}
+
+**Answer:**"""
+
+CHATBOT_SYSTEM_PROMPT = """You are a knowledgeable assistant for document search. Answer questions using ONLY the provided context. Always cite sources when available. If you cannot answer based on the context, clearly state "I don't have enough information to answer that question." Be accurate, concise, and helpful."""

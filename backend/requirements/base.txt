@@ -24,6 +24,7 @@ python-magic>=0.4,<0.5
 # Text Processing and Embeddings
 langchain>=0.1,<0.2
 langchain-openai>=0.0.5,<0.1
+langchain-community>=0.0.10,<0.1
 tiktoken>=0.5,<0.6
 sentence-transformers>=2.3,<2.4
 
