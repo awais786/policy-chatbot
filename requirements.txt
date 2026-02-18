@@ -1,0 +1,10 @@
+# Policy Chatbot - Development Requirements
+# This file points to the backend development requirements for easy installation
+#
+# Usage:
+#   pip install -r requirements.txt
+#
+# Or use the Makefile:
+#   make install-deps
+
+-r backend/requirements/development.txt
