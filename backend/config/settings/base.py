@@ -255,6 +255,17 @@ DEFAULT_TOP_K = 5
 DEFAULT_SIMILARITY_THRESHOLD = 0.7
 
 # ---------------------------------------------------------------------------
+# Chatbot (RAG) defaults
+# ---------------------------------------------------------------------------
+
+CHATBOT_LLM_PROVIDER = os.environ.get("CHATBOT_LLM_PROVIDER", "ollama")
+CHATBOT_LLM_MODEL = os.environ.get("CHATBOT_LLM_MODEL", "mistral")
+CHATBOT_ENABLE_CHAT_HISTORY = os.environ.get(
+    "CHATBOT_ENABLE_CHAT_HISTORY", "true"
+).lower() in ("1", "true", "yes", "on")
+CHATBOT_MAX_CONTEXT_CHARS = int(os.environ.get("CHATBOT_MAX_CONTEXT_CHARS", "8000"))
+
+# ---------------------------------------------------------------------------
 # Celery — async task queue
 # ---------------------------------------------------------------------------
 

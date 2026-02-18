@@ -8,13 +8,37 @@ This service handles:
 """
 
 import logging
-from typing import List, Dict, Any
+import math
+from typing import List, Dict, Any, Optional
 
+from django.conf import settings
 from django.db import connection
+
 from apps.documents.models import DocumentChunk
 from apps.documents.services.embeddings import generate_single_embedding
 
 logger = logging.getLogger(__name__)
+
+MAX_QUERY_LENGTH = 2000
+MAX_SEARCH_LIMIT = 50
+
+
+def _validate_embedding(embedding: List[float]) -> None:
+    """Validate that embedding contains only finite numeric values."""
+    if not embedding:
+        raise ValueError("Empty embedding returned from embedding service")
+
+    expected_dim = int(getattr(settings, "EMBEDDING_DIMENSIONS", 0) or 0)
+    if expected_dim and len(embedding) != expected_dim:
+        raise ValueError(
+            f"Embedding dimension mismatch: expected {expected_dim}, got {len(embedding)}"
+        )
+
+    for i, val in enumerate(embedding):
+        if not isinstance(val, (int, float)):
+            raise ValueError(f"Non-numeric value at embedding index {i}")
+        if not math.isfinite(float(val)):
+            raise ValueError(f"Non-finite value at embedding index {i}")
 
 
 class VectorSearchService:
@@ -28,7 +52,7 @@ class VectorSearchService:
         query: str,
         limit: int = 10,
         min_similarity: float = 0.7,
-        document_ids: List[str] = None,
+        document_ids: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
         Perform semantic search on document chunks.
@@ -42,71 +66,81 @@ class VectorSearchService:
         Returns:
             List of search results with similarity scores
         """
-        try:
-            # Generate embedding for the search query
-            logger.info(f"Generating embedding for query: {query[:50]}...")
-            query_embedding = generate_single_embedding(query)
+        if not query or not query.strip():
+            raise ValueError("Search query cannot be empty")
 
-            # Debug: Check embedding dimensions and sample values
-            logger.info(f"Query embedding dimensions: {len(query_embedding) if query_embedding else 'None'}")
-            if query_embedding:
-                logger.info(f"Query embedding first 5 values: {query_embedding[:5]}")
-                logger.info(f"Query embedding last 5 values: {query_embedding[-5:]}")
-                logger.info(f"Query embedding min/max: {min(query_embedding):.4f} / {max(query_embedding):.4f}")
-
-            # Build the base queryset
-            queryset = DocumentChunk.objects.filter(
-                organization_id=self.organization_id,
-                embedding__isnull=False,
-                document__is_active=True
-            ).select_related('document')
-
-            # Debug: Check how many chunks we have
-            chunk_count = queryset.count()
-            logger.info(f"Found {chunk_count} chunks with embeddings for organization {self.organization_id}")
-
-            # Filter by specific documents if provided
-            if document_ids:
-                queryset = queryset.filter(document_id__in=document_ids)
-
-            # Perform vector similarity search using pgvector
-            results = self._vector_similarity_search(
-                queryset=queryset,
-                query_embedding=query_embedding,
-                limit=limit,
-                min_similarity=min_similarity
+        if len(query) > MAX_QUERY_LENGTH:
+            raise ValueError(
+                f"Query exceeds maximum length of {MAX_QUERY_LENGTH} characters"
             )
 
-            logger.info(f"Found {len(results)} results for query: {query[:50]}")
+        limit = max(1, min(limit, MAX_SEARCH_LIMIT))
+        min_similarity = max(0.0, min(min_similarity, 1.0))
+
+        try:
+            query_embedding = generate_single_embedding(query)
+
+            _validate_embedding(query_embedding)
+
+            logger.info(
+                "Vector search: query_length=%d, embedding_dims=%d, limit=%d, min_similarity=%.2f",
+                len(query), len(query_embedding), limit, min_similarity,
+            )
+
+            results = self._vector_similarity_search(
+                query_embedding=query_embedding,
+                limit=limit,
+                min_similarity=min_similarity,
+                document_ids=document_ids,
+            )
+
+            logger.info(
+                "Vector search completed: results=%d, query_preview=%s",
+                len(results), query[:50],
+            )
             return results
 
+        except ValueError:
+            raise
         except Exception as e:
-            logger.error(f"Vector search failed for query '{query}': {e}")
+            logger.error("Vector search failed: %s", type(e).__name__)
             raise
 
     def _vector_similarity_search(
         self,
-        queryset,
         query_embedding: List[float],
         limit: int,
-        min_similarity: float
+        min_similarity: float,
+        document_ids: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Perform the actual vector similarity search using raw SQL.
+        Perform the actual vector similarity search using raw SQL with pgvector.
 
-        Uses pgvector's cosine similarity operator for efficient search.
+        All parameters are passed through Django's parameterized query mechanism
+        to prevent SQL injection.
         """
-        # Convert embedding to pgvector format
-        embedding_str = f"[{','.join(map(str, query_embedding))}]"
+        embedding_str = "[" + ",".join(str(float(v)) for v in query_embedding) + "]"
 
-        # Debug: Log search parameters
-        logger.info(f"Vector search params: limit={limit}, min_similarity={min_similarity}")
-        logger.info(f"Query embedding length: {len(query_embedding)}")
-        logger.info(f"Organization ID: {self.organization_id}")
+        params: list = [
+            embedding_str,
+            str(self.organization_id),
+        ]
 
-        # First, let's try a simpler query without similarity threshold to see if we get any results
-        debug_sql = """
-        SELECT 
+        document_filter = ""
+        if document_ids:
+            placeholders = ",".join(["%s"] * len(document_ids))
+            document_filter = f"AND dc.document_id IN ({placeholders})"
+            params.extend(str(did) for did in document_ids)
+
+        params.extend([
+            embedding_str,
+            min_similarity,
+            embedding_str,
+            limit,
+        ])
+
+        sql = f"""
+        SELECT
             dc.id,
             dc.document_id,
             dc.chunk_index,
@@ -115,123 +149,58 @@ class VectorSearchService:
             (1 - (dc.embedding <=> %s::vector)) as similarity_score
         FROM document_chunks dc
         INNER JOIN documents d ON dc.document_id = d.id
-        WHERE 
+        WHERE
             dc.organization_id = %s
             AND dc.embedding IS NOT NULL
             AND d.is_active = true
-        ORDER BY dc.embedding <=> %s::vector
-        LIMIT %s;
-        """
-
-        with connection.cursor() as cursor:
-            # First run debug query without similarity filter
-            cursor.execute(debug_sql, [
-                embedding_str,  # query embedding for similarity calculation
-                self.organization_id,  # organization filter
-                embedding_str,  # query embedding for ordering
-                limit  # result limit
-            ])
-
-            debug_results = cursor.fetchall()
-            logger.info(f"Debug query (no similarity filter) found {len(debug_results)} results")
-
-            if debug_results:
-                # Log the similarity scores we're getting
-                for i, row in enumerate(debug_results[:3]):  # Log first 3 results
-                    similarity_score = row[5]  # similarity_score is the 6th column (index 5)
-                    logger.info(f"Result {i+1}: similarity_score = {similarity_score}")
-
-        # Now run the original query with similarity filter
-        sql = """
-        SELECT 
-            dc.id,
-            dc.document_id,
-            dc.chunk_index,
-            dc.content,
-            d.title as document_title,
-            (1 - (dc.embedding <=> %s::vector)) as similarity_score
-        FROM document_chunks dc
-        INNER JOIN documents d ON dc.document_id = d.id
-        WHERE 
-            dc.organization_id = %s
-            AND dc.embedding IS NOT NULL
-            AND d.is_active = true
+            {document_filter}
             AND (1 - (dc.embedding <=> %s::vector)) >= %s
         ORDER BY dc.embedding <=> %s::vector
         LIMIT %s;
         """
 
         with connection.cursor() as cursor:
-            cursor.execute(sql, [
-                embedding_str,  # query embedding for similarity calculation
-                self.organization_id,  # organization filter
-                embedding_str,  # query embedding for threshold check
-                min_similarity,  # minimum similarity threshold
-                embedding_str,  # query embedding for ordering
-                limit  # result limit
-            ])
-
+            cursor.execute(sql, params)
             columns = [col[0] for col in cursor.description]
-            results = []
-
-            for row in cursor.fetchall():
-                result_dict = dict(zip(columns, row))
-                results.append(result_dict)
-
-        logger.info(f"Final query (with similarity >= {min_similarity}) found {len(results)} results")
-        return results
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
 
     def search_by_document(
         self,
         query: str,
         document_id: str,
         limit: int = 5,
-        min_similarity: float = 0.6
+        min_similarity: float = 0.6,
     ) -> List[Dict[str, Any]]:
-        """
-        Search within a specific document only.
-
-        Useful for finding relevant sections within a particular document.
-        """
+        """Search within a specific document only."""
         return self.search(
             query=query,
             limit=limit,
             min_similarity=min_similarity,
-            document_ids=[document_id]
+            document_ids=[document_id],
         )
 
     def get_similar_chunks(
         self,
         chunk_id: str,
         limit: int = 5,
-        min_similarity: float = 0.8
+        min_similarity: float = 0.8,
     ) -> List[Dict[str, Any]]:
-        """
-        Find chunks similar to a given chunk.
-
-        Useful for "more like this" functionality.
-        """
+        """Find chunks similar to a given chunk (\"more like this\")."""
         try:
-            # Get the reference chunk
             chunk = DocumentChunk.objects.get(
                 id=chunk_id,
-                organization_id=self.organization_id
+                organization_id=self.organization_id,
             )
 
             if not chunk.embedding:
-                raise ValueError(f"Chunk {chunk_id} has no embedding")
+                raise ValueError("Reference chunk has no embedding")
 
-            # Use the chunk's embedding as the query
             return self._vector_similarity_search(
-                queryset=DocumentChunk.objects.filter(
-                    organization_id=self.organization_id,
-                    embedding__isnull=False
-                ).exclude(id=chunk_id),  # Exclude the reference chunk itself
                 query_embedding=chunk.embedding,
                 limit=limit,
-                min_similarity=min_similarity
+                min_similarity=min_similarity,
             )
 
         except DocumentChunk.DoesNotExist:
-            logger.error(f"Chunk {chunk_id} not found")
+            logger.warning("Chunk not found for similar-chunk search")
             return []

@@ -23,6 +23,7 @@ class APIKeyAuthMiddleware:
         "/admin/",
         "/api/schema/",
         "/health/",
+        "/api/v1/chat/health/",
     )
 
     def __init__(self, get_response):
