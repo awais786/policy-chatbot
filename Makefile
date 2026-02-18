@@ -1,7 +1,7 @@
 # Policy Chatbot Makefile
 # This file provides convenient commands for local development setup and testing
 
-.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db create-sample-data inspect-db generate-embeddings setup-sample-data
+.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db inspect-db generate-embeddings setup-sample-data
 
 # Default target
 help:
@@ -23,8 +23,8 @@ help:
 	@echo "  ollama-status   - Check if Ollama is running"
 	@echo ""
 	@echo "Development Commands:"
-	@echo "  dev             - Start development servers (Django + Celery + Redis)"
-	@echo "  dev-simple      - Start minimal servers (Django only) - no Redis needed"
+	@echo "  dev             - Start development servers (Django + Celery + Ollama)"
+	@echo "  dev-simple      - Start minimal servers (Django + Ollama only)"
 	@echo "  run-server      - Start Django development server only"
 	@echo "  run-worker      - Start Celery worker only"
 	@echo ""
@@ -42,7 +42,6 @@ help:
 	@echo "  shell           - Open Django shell"
 	@echo "  dbshell         - Open PostgreSQL shell"
 	@echo "  inspect-db      - Show database contents"
-	@echo "  create-sample-data - Create sample documents for testing"
 	@echo "  setup-sample-data - Complete setup: documents + chunks + embeddings (ONE COMMAND)"
 	@echo "  generate-embeddings - Generate embeddings for existing document chunks"
 	@echo "  dump-db         - Create database dump with sample data"
@@ -91,11 +90,10 @@ dev:
 	@echo "  - Ollama server for local LLM"
 	@echo "  - Django server on http://127.0.0.1:8000"
 	@echo "  - Celery worker for document processing"
-	@echo "  - Redis server for caching (optional)"
 	@echo ""
-	@echo "Chat history works in-memory (no Redis required)!"
+	@echo "Chat history works in-memory (no external dependencies)!"
 	@echo "Press Ctrl+C to stop all services"
-	@make start-ollama && make run-redis & make run-worker & make run-server
+	@make start-ollama & make run-worker & make run-server
 
 # Start minimal development environment (no Redis needed)
 dev-simple:
@@ -119,10 +117,6 @@ run-worker:
 	@echo "⚙️  Starting Celery worker..."
 	cd backend && celery -A config worker -l info
 
-# Start Redis server
-run-redis:
-	@echo "📦 Starting Redis server..."
-	redis-server
 
 # Ollama setup and management commands
 setup-ollama:
@@ -310,14 +304,13 @@ onboarding:
 	@echo "   - Python 3.11+"
 	@echo "   - PostgreSQL 15+ with pgvector extension"
 	@echo "   - Ollama (for local LLM) - download from ollama.ai"
-	@echo "   - Redis server (optional - only needed for caching)"
 	@echo ""
 	@echo "2. Run complete setup:"
 	@echo "   make setup"
 	@echo ""
 	@echo "3. Start development environment:"
 	@echo "   make dev-simple    # Simple setup (recommended)"
-	@echo "   make dev          # Full setup with Redis"
+	@echo "   make dev          # Full setup with Celery worker"
 	@echo ""
 	@echo "4. Test the system:"
 	@echo "   make test-system"
@@ -327,34 +320,10 @@ onboarding:
 	@echo ""
 	@echo "6. Access the admin at: http://127.0.0.1:8000/admin/"
 	@echo ""
-	@echo "✅ Chat history works perfectly without Redis!"
 	@echo "Need help? Check 'make help' for all available commands!"
 
-# Database dump and restore for easy development setup
-dump-db:
-	@echo "💾 Creating database dump with sample data..."
-	@mkdir -p database
-	pg_dump -h localhost -U postgres -d chatbot_db --clean --create --if-exists > database/sample_data.sql
-	@echo "✅ Database dump created at database/sample_data.sql"
-	@echo "📊 Database contents:"
-	@make inspect-db
-
-restore-db:
-	@echo "📥 Restoring database from sample data..."
-	@if [ ! -f database/sample_data.sql ]; then \
-		echo "❌ Sample data file not found at database/sample_data.sql"; \
-		echo "Run 'make dump-db' first to create sample data"; \
-		exit 1; \
-	fi
-	@echo "🗑️  Dropping existing database..."
-	-psql postgres -c "DROP DATABASE IF EXISTS chatbot_db;"
-	@echo "📥 Restoring from dump..."
-	psql -h localhost -U postgres < database/sample_data.sql
-	@echo "✅ Database restored from sample data!"
-	@make inspect-db
-
-# Create sample data with embeddings for testing
-create-sample-data:
+# Complete sample data setup: content + chunks + embeddings
+setup-sample-data:
 	@echo "📊 Complete sample data setup: documents + chunks + embeddings..."
 	@cd backend && python3 setup_complete_sample_data.py
 
@@ -363,7 +332,3 @@ generate-embeddings:
 	@echo "🧠 Generating embeddings for existing document chunks..."
 	@cd backend && python3 setup_complete_sample_data.py
 
-# Complete sample data setup: content + chunks + embeddings
-setup-sample-data:
-	@echo "📊 Complete sample data setup: documents + chunks + embeddings..."
-	@cd backend && python3 setup_complete_sample_data.py
