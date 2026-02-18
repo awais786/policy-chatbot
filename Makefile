@@ -1,7 +1,7 @@
 # Policy Chatbot Makefile
 # This file provides convenient commands for local development setup and testing
 
-.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db create-sample-data inspect-db
+.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db create-sample-data inspect-db generate-embeddings setup-sample-data
 
 # Default target
 help:
@@ -41,10 +41,20 @@ help:
 	@echo "  createuser      - Create Django superuser"
 	@echo "  shell           - Open Django shell"
 	@echo "  dbshell         - Open PostgreSQL shell"
+	@echo "  inspect-db      - Show database contents"
+	@echo "  create-sample-data - Create sample documents for testing"
+	@echo "  setup-sample-data - Complete setup: documents + chunks + embeddings (ONE COMMAND)"
+	@echo "  generate-embeddings - Generate embeddings for existing document chunks"
+	@echo "  dump-db         - Create database dump with sample data"
+	@echo "  restore-db      - Restore database from dump"
 
 # Complete setup for new developers
-setup: install-deps setup-ollama setup-db migrate
-	@echo "✅ Complete setup finished! Run 'make dev' to start development servers."
+setup: install-deps setup-ollama setup-db migrate setup-sample-data
+	@echo "✅ Complete setup finished! Now you can:"
+	@echo "  - Run 'make dev-simple' to start development servers"
+	@echo "  - Login to admin: http://127.0.0.1:8000/admin/ (admin/admin123)"
+	@echo "  - Test search: make test-search"
+	@echo "  - Test chat: make test-chat"
 
 # Install Python dependencies
 install-deps:
@@ -202,35 +212,40 @@ test-system: test-search test-chat
 test-search:
 	@echo "🔍 Testing semantic search functionality..."
 	@echo ""
-	@echo "Testing search for 'meezan bank':"
+	@echo "Testing search for 'leave policy':"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-d '{"query": "meezan bank", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
+		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-d '{"query": "leave policy", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
 	@echo ""
-	@echo "Testing search for 'traffic fine':"
+	@echo "Testing search for 'password requirements':"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-d '{"query": "traffic fine", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
+		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-d '{"query": "password requirements", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
 	@echo ""
 
 # Test chat functionality with LangChain
 test-chat:
 	@echo "💬 Testing LangChain chat functionality..."
 	@echo ""
-	@echo "Question 1: What is MEEZAN BANK?"
+	@echo "Question 1: What are the working hours?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-d '{"message": "What is MEEZAN BANK?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
+		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-d '{"message": "What are the working hours?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
-	@echo "Question 2 (Follow-up): What was the fine amount?"
+	@echo "Question 2 (Follow-up): How many vacation days do I get?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-d '{"message": "What was the fine amount?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
+		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-d '{"message": "How many vacation days do I get?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
-	@echo "Question 3 (Follow-up): What happens if I dont pay the traffic fine?"
+	@echo "Question 3 (Follow-up): What about remote work?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-d '{"message": "What happens if I dont pay the traffic fine?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
+		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-d '{"message": "What about remote work?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Checking LangChain session stats:"
 	@curl -X GET http://127.0.0.1:8000/api/v1/chat/stats/ | python3 -m json.tool
@@ -314,3 +329,41 @@ onboarding:
 	@echo ""
 	@echo "✅ Chat history works perfectly without Redis!"
 	@echo "Need help? Check 'make help' for all available commands!"
+
+# Database dump and restore for easy development setup
+dump-db:
+	@echo "💾 Creating database dump with sample data..."
+	@mkdir -p database
+	pg_dump -h localhost -U postgres -d chatbot_db --clean --create --if-exists > database/sample_data.sql
+	@echo "✅ Database dump created at database/sample_data.sql"
+	@echo "📊 Database contents:"
+	@make inspect-db
+
+restore-db:
+	@echo "📥 Restoring database from sample data..."
+	@if [ ! -f database/sample_data.sql ]; then \
+		echo "❌ Sample data file not found at database/sample_data.sql"; \
+		echo "Run 'make dump-db' first to create sample data"; \
+		exit 1; \
+	fi
+	@echo "🗑️  Dropping existing database..."
+	-psql postgres -c "DROP DATABASE IF EXISTS chatbot_db;"
+	@echo "📥 Restoring from dump..."
+	psql -h localhost -U postgres < database/sample_data.sql
+	@echo "✅ Database restored from sample data!"
+	@make inspect-db
+
+# Create sample data with embeddings for testing
+create-sample-data:
+	@echo "📊 Complete sample data setup: documents + chunks + embeddings..."
+	@cd backend && python3 setup_complete_sample_data.py
+
+# Generate embeddings for existing document chunks
+generate-embeddings:
+	@echo "🧠 Generating embeddings for existing document chunks..."
+	@cd backend && python3 setup_complete_sample_data.py
+
+# Complete sample data setup: content + chunks + embeddings
+setup-sample-data:
+	@echo "📊 Complete sample data setup: documents + chunks + embeddings..."
+	@cd backend && python3 setup_complete_sample_data.py
