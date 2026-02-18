@@ -1,7 +1,7 @@
 # Policy Chatbot Makefile
 # This file provides convenient commands for local development setup and testing
 
-.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat
+.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db create-sample-data inspect-db
 
 # Default target
 help:
@@ -24,6 +24,7 @@ help:
 	@echo ""
 	@echo "Development Commands:"
 	@echo "  dev             - Start development servers (Django + Celery + Redis)"
+	@echo "  dev-simple      - Start minimal servers (Django only) - no Redis needed"
 	@echo "  run-server      - Start Django development server only"
 	@echo "  run-worker      - Start Celery worker only"
 	@echo ""
@@ -80,10 +81,23 @@ dev:
 	@echo "  - Ollama server for local LLM"
 	@echo "  - Django server on http://127.0.0.1:8000"
 	@echo "  - Celery worker for document processing"
-	@echo "  - Redis server for caching"
+	@echo "  - Redis server for caching (optional)"
 	@echo ""
+	@echo "Chat history works in-memory (no Redis required)!"
 	@echo "Press Ctrl+C to stop all services"
 	@make start-ollama && make run-redis & make run-worker & make run-server
+
+# Start minimal development environment (no Redis needed)
+dev-simple:
+	@echo "🚀 Starting simple development environment..."
+	@echo "This will start:"
+	@echo "  - Ollama server for local LLM"
+	@echo "  - Django server on http://127.0.0.1:8000"
+	@echo ""
+	@echo "✅ Chat history works perfectly in-memory!"
+	@echo "✅ Document processing available via admin"
+	@echo "Press Ctrl+C to stop all services"
+	@make start-ollama && make run-server
 
 # Start Django development server
 run-server:
@@ -280,14 +294,15 @@ onboarding:
 	@echo "1. Prerequisites:"
 	@echo "   - Python 3.11+"
 	@echo "   - PostgreSQL 15+ with pgvector extension"
-	@echo "   - Redis server"
 	@echo "   - Ollama (for local LLM) - download from ollama.ai"
+	@echo "   - Redis server (optional - only needed for caching)"
 	@echo ""
 	@echo "2. Run complete setup:"
 	@echo "   make setup"
 	@echo ""
 	@echo "3. Start development environment:"
-	@echo "   make dev"
+	@echo "   make dev-simple    # Simple setup (recommended)"
+	@echo "   make dev          # Full setup with Redis"
 	@echo ""
 	@echo "4. Test the system:"
 	@echo "   make test-system"
@@ -297,4 +312,5 @@ onboarding:
 	@echo ""
 	@echo "6. Access the admin at: http://127.0.0.1:8000/admin/"
 	@echo ""
+	@echo "✅ Chat history works perfectly without Redis!"
 	@echo "Need help? Check 'make help' for all available commands!"
