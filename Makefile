@@ -14,6 +14,14 @@ help:
 	@echo "  setup-db        - Create and setup PostgreSQL database with pgvector"
 	@echo "  migrate         - Run Django migrations"
 	@echo ""
+	@echo "Ollama Commands:"
+	@echo "  setup-ollama    - Install and setup Ollama with Mistral model"
+	@echo "  start-ollama    - Start Ollama server"
+	@echo "  stop-ollama     - Stop Ollama server"
+	@echo "  pull-models     - Pull required AI models (Mistral)"
+	@echo "  list-models     - List installed Ollama models"
+	@echo "  ollama-status   - Check if Ollama is running"
+	@echo ""
 	@echo "Development Commands:"
 	@echo "  dev             - Start development servers (Django + Celery + Redis)"
 	@echo "  run-server      - Start Django development server only"
@@ -34,7 +42,7 @@ help:
 	@echo "  dbshell         - Open PostgreSQL shell"
 
 # Complete setup for new developers
-setup: install-deps setup-db migrate
+setup: install-deps setup-ollama setup-db migrate
 	@echo "✅ Complete setup finished! Run 'make dev' to start development servers."
 
 # Install Python dependencies
@@ -69,12 +77,13 @@ migrate:
 dev:
 	@echo "🚀 Starting development environment..."
 	@echo "This will start:"
+	@echo "  - Ollama server for local LLM"
 	@echo "  - Django server on http://127.0.0.1:8000"
 	@echo "  - Celery worker for document processing"
 	@echo "  - Redis server for caching"
 	@echo ""
 	@echo "Press Ctrl+C to stop all services"
-	@make run-redis & make run-worker & make run-server
+	@make start-ollama && make run-redis & make run-worker & make run-server
 
 # Start Django development server
 run-server:
@@ -90,6 +99,86 @@ run-worker:
 run-redis:
 	@echo "📦 Starting Redis server..."
 	redis-server
+
+# Ollama setup and management commands
+setup-ollama:
+	@echo "🤖 Setting up Ollama for local LLM..."
+	@echo "Detecting operating system..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		echo "📱 macOS detected - installing Ollama via Homebrew..."; \
+		if ! command -v ollama > /dev/null 2>&1; then \
+			if command -v brew > /dev/null 2>&1; then \
+				brew install ollama; \
+			else \
+				echo "❌ Homebrew not found. Installing Ollama manually..."; \
+				curl -fsSL https://ollama.ai/install.sh | sh; \
+			fi; \
+		else \
+			echo "✅ Ollama already installed"; \
+		fi; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		echo "🐧 Linux detected - installing Ollama..."; \
+		if ! command -v ollama > /dev/null 2>&1; then \
+			curl -fsSL https://ollama.ai/install.sh | sh; \
+		else \
+			echo "✅ Ollama already installed"; \
+		fi; \
+	else \
+		echo "❓ Unsupported OS. Please install Ollama manually from https://ollama.ai"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting Ollama server..."
+	@make start-ollama
+	@sleep 3
+	@echo "📥 Pulling Mistral model..."
+	@make pull-models
+	@echo "✅ Ollama setup complete!"
+
+start-ollama:
+	@echo "🚀 Starting Ollama server..."
+	@if ! pgrep -f "ollama serve" > /dev/null; then \
+		ollama serve > /dev/null 2>&1 & \
+		echo "✅ Ollama server started in background"; \
+		sleep 2; \
+	else \
+		echo "✅ Ollama server is already running"; \
+	fi
+
+stop-ollama:
+	@echo "🛑 Stopping Ollama server..."
+	@pkill -f "ollama serve" || echo "Ollama server was not running"
+	@echo "✅ Ollama server stopped"
+
+pull-models:
+	@echo "📥 Pulling required AI models..."
+	@echo "Pulling Mistral model (recommended for local development)..."
+	@ollama pull mistral
+	@echo "✅ Models pulled successfully!"
+	@echo ""
+	@echo "Available commands to pull additional models:"
+	@echo "  ollama pull llama2      # Alternative model"
+	@echo "  ollama pull codellama   # Code-focused model"
+	@echo "  ollama pull llama2:7b   # Specific version"
+
+list-models:
+	@echo "📚 Installed Ollama models:"
+	@ollama list || echo "❌ Ollama not running or not installed"
+
+ollama-status:
+	@echo "🔍 Checking Ollama status..."
+	@if command -v ollama > /dev/null 2>&1; then \
+		echo "✅ Ollama is installed"; \
+		if pgrep -f "ollama serve" > /dev/null; then \
+			echo "✅ Ollama server is running"; \
+			echo "📡 Server URL: http://localhost:11434"; \
+			echo "🧠 Testing connection..."; \
+			curl -s http://localhost:11434/api/tags > /dev/null && echo "✅ Ollama API is responding" || echo "❌ Ollama API not responding"; \
+		else \
+			echo "❌ Ollama server is not running - run 'make start-ollama'"; \
+		fi; \
+	else \
+		echo "❌ Ollama is not installed - run 'make setup-ollama'"; \
+	fi
 
 # Test the complete system
 test-system: test-search test-chat
