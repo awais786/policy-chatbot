@@ -327,8 +327,6 @@ setup-sample-data:
 	@echo "📊 Complete sample data setup: documents + chunks + embeddings..."
 	@cd backend && python3 setup_complete_sample_data.py
 
-# Generate embeddings for existing document chunks
-generate-embeddings:
-	@echo "🧠 Generating embeddings for existing document chunks..."
-	@cd backend && python3 setup_complete_sample_data.py
+# Generate embeddings for existing document chunks (alias for setup-sample-data)
+generate-embeddings: setup-sample-data
 
