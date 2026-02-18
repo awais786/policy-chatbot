@@ -41,15 +41,21 @@ except ImportError:
     OPENAI_AVAILABLE = False
 
 try:
-    from langchain_community.llms import Ollama
+    from langchain_ollama import OllamaLLM
     OLLAMA_AVAILABLE = True
 except ImportError:
     try:
-        from langchain.llms import Ollama
+        from langchain_community.llms import Ollama
+        OllamaLLM = Ollama  # Fallback alias
         OLLAMA_AVAILABLE = True
     except ImportError:
-        Ollama = None
-        OLLAMA_AVAILABLE = False
+        try:
+            from langchain.llms import Ollama
+            OllamaLLM = Ollama  # Fallback alias
+            OLLAMA_AVAILABLE = True
+        except ImportError:
+            OllamaLLM = None
+            OLLAMA_AVAILABLE = False
 
 
 class LLMProvider:
@@ -93,11 +99,11 @@ class LLMProvider:
     def _create_ollama_llm(self):
         """Create Ollama LLM instance."""
         if not OLLAMA_AVAILABLE:
-            raise ImportError("langchain-community is required for Ollama support")
+            raise ImportError("langchain-ollama (preferred) or langchain-community is required for Ollama support")
 
         base_url = getattr(settings, 'OLLAMA_BASE_URL', 'http://localhost:11434')
 
-        return Ollama(
+        return OllamaLLM(
             model=self.model,
             base_url=base_url,
             temperature=0.1,
