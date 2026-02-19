@@ -19,6 +19,7 @@ from apps.documents.services.pdf_extractor import (
 )
 from apps.documents.services.text_chunker import chunk_text
 from apps.documents.services.embeddings import generate_embeddings, EmbeddingError
+from apps.documents.services.document_processor import process_document_by_id, DocumentProcessingError
 
 logger = logging.getLogger(__name__)
 

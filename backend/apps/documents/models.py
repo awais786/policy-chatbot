@@ -8,6 +8,8 @@ asynchronously by the Celery task `process_document` — NOT in save().
 import logging
 import uuid
 
+from typing import Any, Dict
+
 from django.conf import settings
 from django.db import models
 from django.db.models import CASCADE, SET_NULL
@@ -115,6 +117,23 @@ class Document(TimeStampedModel):
             logger.info("Scheduled processing for document %s (%s)", self.title, self.pk)
         except Exception as e:
             logger.error(f"Failed to schedule processing for document {self.title}: {e}", exc_info=True)
+
+    def process_document(self, chunk_size: int = 1000, chunk_overlap: int = 200) -> Dict[str, Any]:
+        """
+        Process this document using the unified processing pipeline.
+
+        This method can be called from admin, API views, or anywhere else
+        to trigger document processing synchronously.
+
+        Args:
+            chunk_size: Size of text chunks
+            chunk_overlap: Overlap between chunks
+
+        Returns:
+            Dict with processing results
+        """
+        from apps.documents.services.document_processor import process_document
+        return process_document(self, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     @property
     def is_processed(self) -> bool:
