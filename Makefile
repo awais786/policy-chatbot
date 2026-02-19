@@ -1,7 +1,7 @@
 # Policy Chatbot Makefile
 # This file provides convenient commands for local development setup and testing
 
-.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db inspect-db generate-embeddings setup-sample-data
+.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat test-multi-org setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db inspect-db generate-embeddings setup-sample-data
 
 # Default target
 help:
@@ -32,6 +32,7 @@ help:
 	@echo "  test-system     - Test search and chat functionality"
 	@echo "  test-search     - Test semantic search with sample queries"
 	@echo "  test-chat       - Test LangChain chat with conversation history"
+	@echo "  test-multi-org  - Test multiple organization authentication"
 	@echo ""
 	@echo "Maintenance Commands:"
 	@echo "  clean           - Clean up Python cache files"
@@ -206,17 +207,40 @@ test-system: test-search test-chat
 test-search:
 	@echo "🔍 Testing semantic search functionality..."
 	@echo ""
-	@echo "Testing search for 'leave policy':"
+	@echo "Testing search for 'leave policy' (Sample Organization):"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: test-api-key-123" \
+		-H "X-API-Key: Sample Organization" \
 		-d '{"query": "leave policy", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
 	@echo ""
-	@echo "Testing search for 'password requirements':"
+	@echo "Testing search for 'password requirements' (Sample Organization):"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: test-api-key-123" \
+		-H "X-API-Key: Sample Organization" \
 		-d '{"query": "password requirements", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
+	@echo ""
+
+# Test multiple organizations
+test-multi-org:
+	@echo "🏢 Testing multiple organization authentication..."
+	@echo ""
+	@echo "Testing Sample Organization (by name):"
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
+		-H "Content-Type: application/json" \
+		-H "X-API-Key: Sample Organization" \
+		-d '{"query": "working hours", "limit": 2}' | python3 -m json.tool
+	@echo ""
+	@echo "Testing Arbisoft organization (by name):"
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
+		-H "Content-Type: application/json" \
+		-H "X-API-Key: Arbisoft" \
+		-d '{"query": "policy", "limit": 2}' | python3 -m json.tool
+	@echo ""
+	@echo "Testing with organization UUID (Sample Organization):"
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
+		-H "Content-Type: application/json" \
+		-H "X-API-Key: 0988aa4c-2ed7-4296-ade7-be489232eb10" \
+		-d '{"query": "leave", "limit": 2}' | python3 -m json.tool
 	@echo ""
 
 # Test chat functionality with LangChain
@@ -226,19 +250,19 @@ test-chat:
 	@echo "Question 1: What are the working hours?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: test-api-key-123" \
+		-H "X-API-Key: Sample Organization" \
 		-d '{"message": "What are the working hours?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Question 2 (Follow-up): How many vacation days do I get?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: test-api-key-123" \
+		-H "X-API-Key: Sample Organization" \
 		-d '{"message": "How many vacation days do I get?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Question 3 (Follow-up): What about remote work?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: test-api-key-123" \
+		-H "X-API-Key: Sample Organization" \
 		-d '{"message": "What about remote work?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Checking LangChain session stats:"
