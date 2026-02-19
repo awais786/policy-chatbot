@@ -16,7 +16,7 @@ from apps.documents.models import Document, DocumentChunk
 from apps.documents.services.embeddings import generate_embeddings
 
 def simple_chunk_text(text, chunk_size=500):
-    """Simple text chunking by sentences"""
+    """Simple text chunking by sentences with metadata"""
     if not text or not text.strip():
         return []
 
@@ -28,17 +28,53 @@ def simple_chunk_text(text, chunk_size=500):
 
     chunks = []
     current_chunk = ''
+    char_position = 0
 
     for sentence in sentences:
         if len(current_chunk + sentence) <= chunk_size:
             current_chunk += ' ' + sentence if current_chunk else sentence
         else:
             if current_chunk:
-                chunks.append(current_chunk.strip())
+                # Calculate metadata for this chunk
+                start_pos = char_position
+                end_pos = char_position + len(current_chunk)
+                word_count = len(current_chunk.split())
+                char_count = len(current_chunk)
+
+                chunks.append({
+                    'content': current_chunk.strip(),
+                    'metadata': {
+                        'start_char': start_pos,
+                        'end_char': end_pos,
+                        'char_count': char_count,
+                        'word_count': word_count,
+                        'sentences_count': current_chunk.count('.'),
+                        'chunk_method': 'sentence_splitting',
+                        'chunk_size_limit': chunk_size
+                    }
+                })
+                char_position = end_pos + 1
             current_chunk = sentence
 
     if current_chunk:
-        chunks.append(current_chunk.strip())
+        # Handle the last chunk
+        start_pos = char_position
+        end_pos = char_position + len(current_chunk)
+        word_count = len(current_chunk.split())
+        char_count = len(current_chunk)
+
+        chunks.append({
+            'content': current_chunk.strip(),
+            'metadata': {
+                'start_char': start_pos,
+                'end_char': end_pos,
+                'char_count': char_count,
+                'word_count': word_count,
+                'sentences_count': current_chunk.count('.'),
+                'chunk_method': 'sentence_splitting',
+                'chunk_size_limit': chunk_size
+            }
+        })
 
     return chunks
 
@@ -154,16 +190,17 @@ Transportation:
             continue
 
         chunks = simple_chunk_text(doc.text_content)
-        for i, chunk_content in enumerate(chunks):
+        for i, chunk_data in enumerate(chunks):
             DocumentChunk.objects.create(
                 document=doc,
                 organization=doc.organization,
                 chunk_index=i,
-                content=chunk_content
+                content=chunk_data['content'],
+                metadata=chunk_data['metadata']
             )
             chunks_created += 1
 
-        print(f'  📦 Created {len(chunks)} chunks for {doc.title}')
+        print(f'  📦 Created {len(chunks)} chunks for {doc.title} (with metadata)')
 
     print(f'📝 Total new chunks created: {chunks_created}')
 

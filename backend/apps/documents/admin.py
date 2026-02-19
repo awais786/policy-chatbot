@@ -51,14 +51,30 @@ class EmbeddingStatusFilter(admin.SimpleListFilter):
 
 class DocumentChunkInline(admin.TabularInline):
     model = DocumentChunk
-    fields = ("chunk_index", "content_preview", "has_embedding")
-    readonly_fields = ("chunk_index", "content_preview", "has_embedding")
+    fields = ("chunk_index", "content_preview", "metadata_info", "has_embedding")
+    readonly_fields = ("chunk_index", "content_preview", "metadata_info", "has_embedding")
     extra = 0
     max_num = 0
 
     def content_preview(self, obj):
         return obj.content[:120] + "..." if len(obj.content) > 120 else obj.content
     content_preview.short_description = "Content"
+
+    def metadata_info(self, obj):
+        """Show key metadata info in inline"""
+        if not obj.metadata:
+            return "-"
+
+        info_parts = []
+        if 'word_count' in obj.metadata:
+            info_parts.append(f"{obj.metadata['word_count']}w")
+        if 'sentences_count' in obj.metadata:
+            info_parts.append(f"{obj.metadata['sentences_count']}s")
+        if 'char_count' in obj.metadata:
+            info_parts.append(f"{obj.metadata['char_count']}c")
+
+        return " | ".join(info_parts) if info_parts else "✓"
+    metadata_info.short_description = "Metadata"
 
     def has_embedding(self, obj):
         return obj.embedding is not None
@@ -244,6 +260,7 @@ class DocumentChunkAdmin(admin.ModelAdmin):
         "organization",
         "content_preview",
         "content_length",
+        "metadata_preview",
         "embedding_status",
         "created_at",
     )
@@ -263,6 +280,10 @@ class DocumentChunkAdmin(admin.ModelAdmin):
         (
             "Content",
             {"fields": ("content",)},
+        ),
+        (
+            "Metadata",
+            {"fields": ("metadata",), "classes": ("collapse",)},
         ),
         (
             "Vector Embedding",
@@ -288,6 +309,25 @@ class DocumentChunkAdmin(admin.ModelAdmin):
     def content_length(self, obj):
         return len(obj.content)
     content_length.short_description = "Length"
+
+    def metadata_preview(self, obj):
+        """Show formatted preview of the metadata"""
+        if not obj.metadata:
+            return "-"
+
+        # Show key metadata fields in a readable format
+        meta_items = []
+        if 'word_count' in obj.metadata:
+            meta_items.append(f"words: {obj.metadata['word_count']}")
+        if 'char_count' in obj.metadata:
+            meta_items.append(f"chars: {obj.metadata['char_count']}")
+        if 'sentences_count' in obj.metadata:
+            meta_items.append(f"sentences: {obj.metadata['sentences_count']}")
+        if 'chunk_method' in obj.metadata:
+            meta_items.append(f"method: {obj.metadata['chunk_method']}")
+
+        return " | ".join(meta_items) if meta_items else str(obj.metadata)[:50] + "..."
+    metadata_preview.short_description = "Metadata"
 
     def embedding_status(self, obj):
         if obj.embedding is not None:

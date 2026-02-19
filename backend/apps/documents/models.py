@@ -138,6 +138,11 @@ class DocumentChunk(TimeStampedModel):
     content = models.TextField()
     chunk_index = models.IntegerField()
     embedding = VectorField(dimensions=getattr(settings, 'EMBEDDING_DIMENSIONS', 1536), null=True, blank=True)
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Chunk metadata: char positions, word count, section info, etc."
+    )
 
     class Meta:
         db_table = "document_chunks"
