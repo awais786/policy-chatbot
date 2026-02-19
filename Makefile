@@ -1,7 +1,7 @@
 # Policy Chatbot Makefile
 # This file provides convenient commands for local development setup and testing
 
-.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat
+.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat test-multi-org setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db inspect-db generate-embeddings setup-sample-data
 
 # Default target
 help:
@@ -14,8 +14,17 @@ help:
 	@echo "  setup-db        - Create and setup PostgreSQL database with pgvector"
 	@echo "  migrate         - Run Django migrations"
 	@echo ""
+	@echo "Ollama Commands:"
+	@echo "  setup-ollama    - Install and setup Ollama with Mistral model"
+	@echo "  start-ollama    - Start Ollama server"
+	@echo "  stop-ollama     - Stop Ollama server"
+	@echo "  pull-models     - Pull required AI models (Mistral)"
+	@echo "  list-models     - List installed Ollama models"
+	@echo "  ollama-status   - Check if Ollama is running"
+	@echo ""
 	@echo "Development Commands:"
-	@echo "  dev             - Start development servers (Django + Celery + Redis)"
+	@echo "  dev             - Start development servers (Django + Celery + Ollama)"
+	@echo "  dev-simple      - Start minimal servers (Django + Ollama only)"
 	@echo "  run-server      - Start Django development server only"
 	@echo "  run-worker      - Start Celery worker only"
 	@echo ""
@@ -23,6 +32,7 @@ help:
 	@echo "  test-system     - Test search and chat functionality"
 	@echo "  test-search     - Test semantic search with sample queries"
 	@echo "  test-chat       - Test LangChain chat with conversation history"
+	@echo "  test-multi-org  - Test multiple organization authentication"
 	@echo ""
 	@echo "Maintenance Commands:"
 	@echo "  clean           - Clean up Python cache files"
@@ -32,10 +42,19 @@ help:
 	@echo "  createuser      - Create Django superuser"
 	@echo "  shell           - Open Django shell"
 	@echo "  dbshell         - Open PostgreSQL shell"
+	@echo "  inspect-db      - Show database contents"
+	@echo "  setup-sample-data - Complete setup: documents + chunks + embeddings (ONE COMMAND)"
+	@echo "  generate-embeddings - Generate embeddings for existing document chunks"
+	@echo "  dump-db         - Create database dump with sample data"
+	@echo "  restore-db      - Restore database from dump"
 
 # Complete setup for new developers
-setup: install-deps setup-db migrate
-	@echo "✅ Complete setup finished! Run 'make dev' to start development servers."
+setup: install-deps setup-ollama setup-db migrate setup-sample-data
+	@echo "✅ Complete setup finished! Now you can:"
+	@echo "  - Run 'make dev-simple' to start development servers"
+	@echo "  - Login to admin: http://127.0.0.1:8000/admin/ (admin/admin123)"
+	@echo "  - Test search: make test-search"
+	@echo "  - Test chat: make test-chat"
 
 # Install Python dependencies
 install-deps:
@@ -69,12 +88,25 @@ migrate:
 dev:
 	@echo "🚀 Starting development environment..."
 	@echo "This will start:"
+	@echo "  - Ollama server for local LLM"
 	@echo "  - Django server on http://127.0.0.1:8000"
 	@echo "  - Celery worker for document processing"
-	@echo "  - Redis server for caching"
 	@echo ""
+	@echo "Chat history works in-memory (no external dependencies)!"
 	@echo "Press Ctrl+C to stop all services"
-	@make run-redis & make run-worker & make run-server
+	@make start-ollama & make run-worker & make run-server
+
+# Start minimal development environment (no Redis needed)
+dev-simple:
+	@echo "🚀 Starting simple development environment..."
+	@echo "This will start:"
+	@echo "  - Ollama server for local LLM"
+	@echo "  - Django server on http://127.0.0.1:8000"
+	@echo ""
+	@echo "✅ Chat history works perfectly in-memory!"
+	@echo "✅ Document processing available via admin"
+	@echo "Press Ctrl+C to stop all services"
+	@make start-ollama && make run-server
 
 # Start Django development server
 run-server:
@@ -86,10 +118,86 @@ run-worker:
 	@echo "⚙️  Starting Celery worker..."
 	cd backend && celery -A config worker -l info
 
-# Start Redis server
-run-redis:
-	@echo "📦 Starting Redis server..."
-	redis-server
+
+# Ollama setup and management commands
+setup-ollama:
+	@echo "🤖 Setting up Ollama for local LLM..."
+	@echo "Detecting operating system..."
+	@if [ "$$(uname)" = "Darwin" ]; then \
+		echo "📱 macOS detected - installing Ollama via Homebrew..."; \
+		if ! command -v ollama > /dev/null 2>&1; then \
+			if command -v brew > /dev/null 2>&1; then \
+				brew install ollama; \
+			else \
+				echo "❌ Homebrew not found. Installing Ollama manually..."; \
+				curl -fsSL https://ollama.ai/install.sh | sh; \
+			fi; \
+		else \
+			echo "✅ Ollama already installed"; \
+		fi; \
+	elif [ "$$(uname)" = "Linux" ]; then \
+		echo "🐧 Linux detected - installing Ollama..."; \
+		if ! command -v ollama > /dev/null 2>&1; then \
+			curl -fsSL https://ollama.ai/install.sh | sh; \
+		else \
+			echo "✅ Ollama already installed"; \
+		fi; \
+	else \
+		echo "❓ Unsupported OS. Please install Ollama manually from https://ollama.ai"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting Ollama server..."
+	@make start-ollama
+	@sleep 3
+	@echo "📥 Pulling Mistral model..."
+	@make pull-models
+	@echo "✅ Ollama setup complete!"
+
+start-ollama:
+	@echo "🚀 Starting Ollama server..."
+	@if ! pgrep -f "ollama serve" > /dev/null; then \
+		ollama serve > /dev/null 2>&1 & \
+		echo "✅ Ollama server started in background"; \
+		sleep 2; \
+	else \
+		echo "✅ Ollama server is already running"; \
+	fi
+
+stop-ollama:
+	@echo "🛑 Stopping Ollama server..."
+	@pkill -f "ollama serve" || echo "Ollama server was not running"
+	@echo "✅ Ollama server stopped"
+
+pull-models:
+	@echo "📥 Pulling required AI models..."
+	@echo "Pulling Mistral model (recommended for local development)..."
+	@ollama pull mistral
+	@echo "✅ Models pulled successfully!"
+	@echo ""
+	@echo "Available commands to pull additional models:"
+	@echo "  ollama pull llama2      # Alternative model"
+	@echo "  ollama pull codellama   # Code-focused model"
+	@echo "  ollama pull llama2:7b   # Specific version"
+
+list-models:
+	@echo "📚 Installed Ollama models:"
+	@ollama list || echo "❌ Ollama not running or not installed"
+
+ollama-status:
+	@echo "🔍 Checking Ollama status..."
+	@if command -v ollama > /dev/null 2>&1; then \
+		echo "✅ Ollama is installed"; \
+		if pgrep -f "ollama serve" > /dev/null; then \
+			echo "✅ Ollama server is running"; \
+			echo "📡 Server URL: http://localhost:11434"; \
+			echo "🧠 Testing connection..."; \
+			curl -s http://localhost:11434/api/tags > /dev/null && echo "✅ Ollama API is responding" || echo "❌ Ollama API not responding"; \
+		else \
+			echo "❌ Ollama server is not running - run 'make start-ollama'"; \
+		fi; \
+	else \
+		echo "❌ Ollama is not installed - run 'make setup-ollama'"; \
+	fi
 
 # Test the complete system
 test-system: test-search test-chat
@@ -99,35 +207,63 @@ test-system: test-search test-chat
 test-search:
 	@echo "🔍 Testing semantic search functionality..."
 	@echo ""
-	@echo "Testing search for 'meezan bank':"
+	@echo "Testing search for 'leave policy' (Sample Organization):"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-d '{"query": "meezan bank", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
+		-H "X-API-Key: Sample Organization" \
+		-d '{"query": "leave policy", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
 	@echo ""
-	@echo "Testing search for 'traffic fine':"
+	@echo "Testing search for 'password requirements' (Sample Organization):"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-d '{"query": "traffic fine", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
+		-H "X-API-Key: Sample Organization" \
+		-d '{"query": "password requirements", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
+	@echo ""
+
+# Test multiple organizations
+test-multi-org:
+	@echo "🏢 Testing multiple organization authentication..."
+	@echo ""
+	@echo "Testing Sample Organization (by name):"
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
+		-H "Content-Type: application/json" \
+		-H "X-API-Key: Sample Organization" \
+		-d '{"query": "working hours", "limit": 2}' | python3 -m json.tool
+	@echo ""
+	@echo "Testing Arbisoft organization (by name):"
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
+		-H "Content-Type: application/json" \
+		-H "X-API-Key: Arbisoft" \
+		-d '{"query": "policy", "limit": 2}' | python3 -m json.tool
+	@echo ""
+	@echo "Testing with organization UUID (Sample Organization):"
+	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
+		-H "Content-Type: application/json" \
+		-H "X-API-Key: 0988aa4c-2ed7-4296-ade7-be489232eb10" \
+		-d '{"query": "leave", "limit": 2}' | python3 -m json.tool
 	@echo ""
 
 # Test chat functionality with LangChain
 test-chat:
 	@echo "💬 Testing LangChain chat functionality..."
 	@echo ""
-	@echo "Question 1: What is MEEZAN BANK?"
+	@echo "Question 1: What are the working hours?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-d '{"message": "What is MEEZAN BANK?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
+		-H "X-API-Key: Sample Organization" \
+		-d '{"message": "What are the working hours?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
-	@echo "Question 2 (Follow-up): What was the fine amount?"
+	@echo "Question 2 (Follow-up): How many vacation days do I get?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-d '{"message": "What was the fine amount?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
+		-H "X-API-Key: Sample Organization" \
+		-d '{"message": "How many vacation days do I get?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
-	@echo "Question 3 (Follow-up): What happens if I dont pay the traffic fine?"
+	@echo "Question 3 (Follow-up): What about remote work?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-d '{"message": "What happens if I dont pay the traffic fine?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
+		-H "X-API-Key: Sample Organization" \
+		-d '{"message": "What about remote work?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Checking LangChain session stats:"
 	@curl -X GET http://127.0.0.1:8000/api/v1/chat/stats/ | python3 -m json.tool
@@ -191,14 +327,14 @@ onboarding:
 	@echo "1. Prerequisites:"
 	@echo "   - Python 3.11+"
 	@echo "   - PostgreSQL 15+ with pgvector extension"
-	@echo "   - Redis server"
 	@echo "   - Ollama (for local LLM) - download from ollama.ai"
 	@echo ""
 	@echo "2. Run complete setup:"
 	@echo "   make setup"
 	@echo ""
 	@echo "3. Start development environment:"
-	@echo "   make dev"
+	@echo "   make dev-simple    # Simple setup (recommended)"
+	@echo "   make dev          # Full setup with Celery worker"
 	@echo ""
 	@echo "4. Test the system:"
 	@echo "   make test-system"
@@ -209,3 +345,12 @@ onboarding:
 	@echo "6. Access the admin at: http://127.0.0.1:8000/admin/"
 	@echo ""
 	@echo "Need help? Check 'make help' for all available commands!"
+
+# Complete sample data setup: content + chunks + embeddings
+setup-sample-data:
+	@echo "📊 Complete sample data setup: documents + chunks + embeddings..."
+	@cd backend && python3 setup_complete_sample_data.py
+
+# Generate embeddings for existing document chunks (alias for setup-sample-data)
+generate-embeddings: setup-sample-data
+
