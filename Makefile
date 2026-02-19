@@ -209,13 +209,13 @@ test-search:
 	@echo "Testing search for 'leave policy':"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-H "X-API-Key: test-api-key-123" \
 		-d '{"query": "leave policy", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
 	@echo ""
 	@echo "Testing search for 'password requirements':"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-H "X-API-Key: test-api-key-123" \
 		-d '{"query": "password requirements", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
 	@echo ""
 
@@ -226,19 +226,19 @@ test-chat:
 	@echo "Question 1: What are the working hours?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-H "X-API-Key: test-api-key-123" \
 		-d '{"message": "What are the working hours?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Question 2 (Follow-up): How many vacation days do I get?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-H "X-API-Key: test-api-key-123" \
 		-d '{"message": "How many vacation days do I get?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Question 3 (Follow-up): What about remote work?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: YsHjDJ6j0by0EsI3yWWaDOl2iThjIK9c0eAG9UtrYHg" \
+		-H "X-API-Key: test-api-key-123" \
 		-d '{"message": "What about remote work?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Checking LangChain session stats:"
