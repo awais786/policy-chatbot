@@ -20,16 +20,20 @@ django-storages>=1.14,<1.15
 # Document Processing
 PyPDF2>=3.0,<3.1
 pdfplumber>=0.10,<0.11
+PyMuPDF>=1.24,<1.26
 python-magic>=0.4,<0.5
 
 # Text Processing and Embeddings
-langchain>=0.1,<0.2
-langchain-core>=1.0,<2.0
+langchain>=0.1,<0.3
+langchain-core>=0.1,<0.3
 langchain-community>=0.0.10,<0.1
-langchain-openai>=0.0.5,<0.1
+langchain-openai>=0.0.5,<0.2
 langchain-ollama>=1.0,<2.0
 tiktoken>=0.5,<0.6
 sentence-transformers>=2.3,<2.4
+
+# Enhanced Text Processing
+spacy>=3.7,<3.8
 
 # LLM Providers (OpenAI for production, Ollama for local)
 openai>=1.10,<1.11
