@@ -52,6 +52,10 @@ class SearchRequestSerializer(serializers.Serializer):
         default=0.7, min_value=0.0, max_value=1.0,
         help_text="Minimum similarity threshold",
     )
+    organization_id = serializers.CharField(
+        required=False,
+        help_text="Organization ID (optional, can also use X-API-Key header)",
+    )
 
     def validate_query(self, value: str) -> str:
         value = _strip_html(value).strip()
@@ -74,6 +78,10 @@ class ChatRequestSerializer(serializers.Serializer):
     include_sources = serializers.BooleanField(
         default=True,
         help_text="Include source documents in response",
+    )
+    organization_id = serializers.CharField(
+        required=False,
+        help_text="Organization ID (optional, can also use X-API-Key header)",
     )
 
     def validate_message(self, value: str) -> str:

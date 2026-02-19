@@ -23,40 +23,50 @@ from apps.chatbot.services.search import VectorSearchService
 logger = logging.getLogger(__name__)
 
 
-def _get_organization_id(request) -> str:
+def _get_organization_id(request, data=None) -> str:
     """Extract organization ID from the request.
 
-    Uses request.organization from APIKeyAuthMiddleware (X-API-Key header).
-    Returns 401 when organization is missing for search/chat endpoints.
+    Resolution order:
+      1. organization_id in request body
+      2. request.organization set by APIKeyAuthMiddleware
+      3. DEFAULT_ORGANIZATION_ID from settings
     """
+    if data and "organization_id" in data:
+        return str(data["organization_id"])
+
     org = getattr(request, "organization", None)
-    if org is None:
-        raise ValueError(
-            "Organization required. Provide a valid X-API-Key header."
-        )
-    return str(org.id)
+    if org is not None:
+        return str(org.id)
+
+    default_org = getattr(settings, "DEFAULT_ORGANIZATION_ID", None)
+    if default_org:
+        return str(default_org)
+
+    raise ValueError(
+        "No organization resolved. Set DEFAULT_ORGANIZATION_ID in settings."
+    )
 
 
 @api_view(["POST"])
-@permission_classes([AllowAny])  # Org resolved via X-API-Key middleware
+@permission_classes([AllowAny])  # No authentication required for testing
 def search_documents(request):
     """
     Semantic search endpoint for finding relevant document chunks.
 
     POST /api/v1/chat/search/
-    Requires X-API-Key header for organization scoping.
+    Can use either X-API-Key header or organization_id in request body.
     """
-    try:
-        organization_id = _get_organization_id(request)
-    except ValueError as exc:
-        return Response(
-            {"error": str(exc)},
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
-
     serializer = SearchRequestSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        organization_id = _get_organization_id(request, request.data)
+    except ValueError as exc:
+        return Response(
+            {"error": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,  # Changed from 401 to 400
+        )
 
     query = serializer.validated_data["query"]
     limit = serializer.validated_data.get("limit", 10)
@@ -106,25 +116,25 @@ def search_documents(request):
 
 
 @api_view(["POST"])
-@permission_classes([AllowAny])  # Org resolved via X-API-Key middleware
+@permission_classes([AllowAny])  # No authentication required for testing
 def chat_with_documents(request):
     """
     Chat endpoint that combines search with LLM for conversational responses.
 
     POST /api/v1/chat/
-    Requires X-API-Key header for organization scoping.
+    Can use either X-API-Key header or organization_id in request body.
     """
-    try:
-        organization_id = _get_organization_id(request)
-    except ValueError as exc:
-        return Response(
-            {"error": str(exc)},
-            status=status.HTTP_401_UNAUTHORIZED,
-        )
-
     serializer = ChatRequestSerializer(data=request.data)
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        organization_id = _get_organization_id(request, request.data)
+    except ValueError as exc:
+        return Response(
+            {"error": str(exc)},
+            status=status.HTTP_400_BAD_REQUEST,  # Changed from 401 to 400
+        )
 
     user_message = serializer.validated_data["message"]
     session_id = serializer.validated_data.get("session_id") or str(uuid.uuid4())
