@@ -20,6 +20,7 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 MAX_BATCH_SIZE = 2048
+MAX_TEXT_CHARS = 28000  # ~8000 tokens safety limit for embedding APIs
 
 
 class EmbeddingError(Exception):
@@ -261,13 +262,23 @@ def reset_provider_cache():
 # Public API (used by the Celery task)
 # ---------------------------------------------------------------------------
 
+def _truncate_text(text: str, max_chars: int = MAX_TEXT_CHARS) -> str:
+    """Truncate text to stay within embedding API token limits."""
+    if len(text) <= max_chars:
+        return text
+    truncated = text[:max_chars]
+    last_period = truncated.rfind(". ")
+    if last_period > max_chars * 0.8:
+        return truncated[: last_period + 1]
+    return truncated
+
+
 def generate_embeddings(texts: Sequence[str]) -> list[list[float]]:
     """
     Generate embeddings for a list of texts using the configured provider.
 
     Returns:
         List of embedding vectors (same order as input texts).
-        Individual items may be None if that specific text failed.
 
     Raises:
         EmbeddingError: If the provider fails entirely.
@@ -281,14 +292,15 @@ def generate_embeddings(texts: Sequence[str]) -> list[list[float]]:
         provider.provider_name(), len(texts),
     )
 
+    safe_texts = [_truncate_text(t) for t in texts]
+
     try:
-        embeddings = provider.embed(list(texts))
+        embeddings = provider.embed(safe_texts)
     except EmbeddingError:
         raise
     except Exception as exc:
         raise EmbeddingError(f"Embedding generation failed: {exc}") from exc
 
-    # Validate dimensions if configured
     expected_dim = getattr(settings, "EMBEDDING_DIMENSIONS", None)
     if expected_dim and embeddings:
         for i, vec in enumerate(embeddings):
@@ -298,7 +310,7 @@ def generate_embeddings(texts: Sequence[str]) -> list[list[float]]:
                     "Check EMBEDDING_DIMENSIONS matches your model.",
                     i, len(vec), expected_dim,
                 )
-                break  # Log once, not for every vector
+                break
 
     return embeddings
 

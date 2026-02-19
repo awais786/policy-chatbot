@@ -209,24 +209,23 @@ def _format_table_as_text(table) -> str:
 def _extract_with_pdfplumber(pdf_bytes: bytes) -> ExtractionResult:
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         page_texts: List[str] = []
-        all_segments: List[str] = []
+        table_segments: List[str] = []
         tables_found = 0
 
         for page in pdf.pages:
             raw = page.extract_text() or ""
             cleaned = preprocess_extracted_text(raw)
             page_texts.append(cleaned)
-            if cleaned:
-                all_segments.append(cleaned)
 
             for table in page.extract_tables() or []:
                 table_text = _format_table_as_text(table)
                 if table_text:
                     tables_found += 1
-                    all_segments.append(f"[TABLE]\n{table_text}\n[/TABLE]")
+                    table_segments.append(f"[TABLE]\n{table_text}\n[/TABLE]")
 
         page_texts = _remove_headers_footers(page_texts)
-        text = "\n\n".join(s for s in all_segments if s.strip()).strip()
+        all_segments = [pt for pt in page_texts if pt.strip()] + table_segments
+        text = "\n\n".join(all_segments).strip()
         meta = pdf.metadata or {}
 
         return ExtractionResult(
