@@ -46,11 +46,28 @@ class Document(TimeStampedModel):
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
 
+    class Category(models.TextChoices):
+        GENERAL = "general", "General"
+        HR = "hr", "HR"
+        FINANCE = "finance", "Finance"
+        POLICY = "policy", "Policy"
+        CV = "cv", "CV / Resume"
+        LEGAL = "legal", "Legal"
+        TECHNICAL = "technical", "Technical"
+        OTHER = "other", "Other"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(
         Organization, on_delete=CASCADE, related_name="documents"
     )
     title = models.CharField(max_length=500)
+    category = models.CharField(
+        max_length=20,
+        choices=Category.choices,
+        default=Category.GENERAL,
+        db_index=True,
+        help_text="Document category for filtering and context",
+    )
     file = models.FileField(upload_to=document_upload_path, blank=True, null=True)
     is_active = models.BooleanField(
         default=True,

@@ -10,8 +10,8 @@ from .models import Document, DocumentChunk
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    list_display = ['title', 'organization', 'status', 'is_active', 'chunk_count', 'created_at']
-    list_filter = ['status', 'is_active', 'organization', 'created_at']
+    list_display = ['title', 'category', 'organization', 'status', 'is_active', 'chunk_count', 'created_at']
+    list_filter = ['category', 'status', 'is_active', 'organization', 'created_at']
     search_fields = ['title', 'organization__name']
     readonly_fields = ['id', 'created_at', 'updated_at', 'processed_at', 'chunk_count']
     actions = ['reprocess_documents', 'reprocess_with_enhanced_pipeline']

@@ -422,3 +422,117 @@ def _to_dict(result: ExtractionResult, attempts: List[str]) -> Dict[str, Any]:
         "page_texts": result.page_texts,
         "metadata": result.metadata,
     }
+
+
+# ---------------------------------------------------------------------------
+# Title extraction helper
+# ---------------------------------------------------------------------------
+
+_JUNK_WORDS = frozenset({
+    "untitled", "document", "page", "pdf", "copy", "draft", "final",
+    "version", "rev", "revision", "sample", "template", "none", "null",
+    "microsoft", "word", "adobe", "acrobat",
+})
+
+# Lines that look like contact info / metadata rather than a title
+_CONTACT_LINE_RE = re.compile(
+    r"(?:@|\+\d|\b\d{5,}\b|linkedin|github|http|www\.|\.com|\.pk|\.io)",
+    re.IGNORECASE,
+)
+
+# Lines that are clearly section headings / noise rather than a title
+_NOISE_LINE_RE = re.compile(
+    r"^(?:curriculum vitae|resume|cv|profile|summary|objective|"
+    r"education|experience|skills|languages|references|page\s*\d+)$",
+    re.IGNORECASE,
+)
+
+# City / location-only lines (e.g. "Lahore", "Lahore, Pk", "Lahore, Pakistan")
+_LOCATION_LINE_RE = re.compile(
+    r"^[A-Z][a-z]+(?:,\s*[A-Z][a-zA-Z]+){0,2}\.?$"
+)
+
+
+def _title_score(line: str) -> int:
+    """
+    Score a candidate title line. Higher = better title.
+      +3  looks like a person name (2-4 Title Case words, no punctuation)
+      +2  looks like a company / org name (contains Ltd, Inc, Pvt, Corp, etc.)
+      +1  mixed case, reasonable length (8-80 chars)
+       0  everything else
+    """
+    words = line.split()
+    # Person name: 2-4 words, each starting with uppercase, no digits
+    if (
+        2 <= len(words) <= 4
+        and all(w[0].isupper() for w in words if w)
+        and not any(c.isdigit() for c in line)
+        and "," not in line
+    ):
+        return 3
+    # Company / org name
+    if re.search(r"\b(?:Ltd|Pvt|Inc|Corp|LLC|Co\.|Foundation|Institute|University|Bank|Group)\b", line, re.IGNORECASE):
+        return 2
+    # Reasonable mixed-case line
+    if 8 <= len(line) <= 80 and line != line.upper():
+        return 1
+    return 0
+
+
+def extract_title_from_pdf_text(
+    extracted_metadata: Dict[str, Any],
+    extracted_text: str,
+) -> Optional[str]:
+    """
+    Try to determine a meaningful document title from:
+      1. PDF metadata fields (Title, Author)
+      2. First non-trivial lines of extracted text — scored and ranked
+
+    Returns a clean title string, or None if nothing useful is found.
+    """
+    # --- 1. Try PDF metadata ---
+    for field in ("title", "author"):
+        candidate = str(extracted_metadata.get(field) or "").strip()
+        if not candidate:
+            continue
+        lower = candidate.lower()
+        if lower in _JUNK_WORDS or len(candidate) < 3:
+            continue
+        if any(junk in lower for junk in _JUNK_WORDS):
+            continue
+        logger.debug("Title from PDF metadata (%s): %r", field, candidate)
+        return candidate
+
+    # --- 2. Scan first lines of text ---
+    if not extracted_text:
+        return None
+
+    lines = [ln.strip() for ln in extracted_text.splitlines() if ln.strip()]
+    candidates: List[tuple] = []  # (score, line)
+
+    for line in lines[:30]:  # look at top of document
+        if _CONTACT_LINE_RE.search(line):
+            continue
+        if _NOISE_LINE_RE.match(line):
+            continue
+        if _LOCATION_LINE_RE.match(line):
+            continue
+        if len(line) > 120 or len(line) < 3:
+            continue
+        # Skip all-uppercase lines with many words (letterhead noise)
+        words = line.split()
+        if len(words) > 6 and line == line.upper():
+            continue
+        score = _title_score(line)
+        if score > 0:
+            candidates.append((score, line))
+
+    if not candidates:
+        return None
+
+    # Return the highest-scored candidate (first one if tie)
+    candidates.sort(key=lambda x: -x[0])
+    best = candidates[0][1]
+    logger.debug("Title from text scan: %r (score=%d)", best, candidates[0][0])
+    return best
+

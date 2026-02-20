@@ -49,7 +49,7 @@ class SearchRequestSerializer(serializers.Serializer):
         help_text="Number of results to return",
     )
     min_similarity = serializers.FloatField(
-        default=0.7, min_value=0.0, max_value=1.0,
+        default=0.3, min_value=0.0, max_value=1.0,
         help_text="Minimum similarity threshold",
     )
     organization_id = serializers.CharField(
