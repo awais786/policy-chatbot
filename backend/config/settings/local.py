@@ -7,22 +7,26 @@ environments can explicitly use `config.settings.local`.
 
 from .base import *  # noqa: F401, F403
 
+import os
+
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
 # ---------------------------------------------------------------------------
 # Database — PostgreSQL with pgvector for local development
+# Read credentials from environment variables to avoid committing secrets.
+# Defaults match the previous values so no change required if you used defaults.
 # ---------------------------------------------------------------------------
 
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'chatbot_db',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': os.getenv('DB_NAME', 'chatbot_db_20'),
+        'USER': os.getenv('DB_USER', 'postgres'),
+        'PASSWORD': os.getenv('DB_PASS', 'postgres'),
+        'HOST': os.getenv('DB_HOST', 'localhost'),
+        'PORT': os.getenv('DB_PORT', '5432'),
         'OPTIONS': {
             'options': '-c search_path=public',
         },

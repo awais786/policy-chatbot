@@ -251,10 +251,11 @@ DEFAULT_LLM_TEMPERATURE = 0.7
 DEFAULT_LLM_MAX_TOKENS = 1000
 
 # ---------------------------------------------------------------------------
-# Default organization (used when no X-API-Key or organization_id provided)
+# Default organization — resolved dynamically from DB when not provided.
+# Set DEFAULT_ORGANIZATION_SLUG to auto-resolve by slug if needed.
 # ---------------------------------------------------------------------------
 
-DEFAULT_ORGANIZATION_ID = os.environ.get('DEFAULT_ORGANIZATION_ID', 'dcbd2e32-923b-420d-a58a-c6523da4af6d')
+DEFAULT_ORGANIZATION_SLUG = os.environ.get('DEFAULT_ORGANIZATION_SLUG', 'arbisoft')
 
 # ---------------------------------------------------------------------------
 # Search defaults

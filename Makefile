@@ -1,7 +1,7 @@
 # Policy Chatbot Makefile
 # This file provides convenient commands for local development setup and testing
 
-.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat test-multi-org setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db inspect-db generate-embeddings setup-sample-data
+.PHONY: help install-deps setup-db migrate test-system clean dev run-server run-worker test-search test-chat test-multi-org setup-ollama start-ollama stop-ollama pull-models list-models ollama-status dump-db restore-db inspect-db generate-embeddings setup-sample-data local-setup
 
 # Default target
 help:
@@ -9,9 +9,8 @@ help:
 	@echo "====================================="
 	@echo ""
 	@echo "Setup Commands:"
-	@echo "  setup           - Complete local development setup (deps + db + migrate)"
+	@echo "  local-setup     - Create DB, run migrations, create superuser, load sample data (ONE COMMAND)"
 	@echo "  install-deps    - Install Python dependencies for local development"
-	@echo "  setup-db        - Create and setup PostgreSQL database with pgvector"
 	@echo "  migrate         - Run Django migrations"
 	@echo ""
 	@echo "Ollama Commands:"
@@ -48,13 +47,10 @@ help:
 	@echo "  dump-db         - Create database dump with sample data"
 	@echo "  restore-db      - Restore database from dump"
 
-# Complete setup for new developers
-setup: install-deps setup-ollama setup-db migrate setup-sample-data
-	@echo "✅ Complete setup finished! Now you can:"
-	@echo "  - Run 'make dev-simple' to start development servers"
-	@echo "  - Login to admin: http://127.0.0.1:8000/admin/ (admin/admin123)"
-	@echo "  - Test search: make test-search"
-	@echo "  - Test chat: make test-chat"
+# One-command local setup: create DB + pgvector, migrate, superuser, sample data
+local-setup:
+	@chmod +x ./local_setup.sh || true
+	@./local_setup.sh --safe
 
 # Install Python dependencies
 install-deps:
@@ -226,10 +222,10 @@ test-multi-org:
 		-H "X-API-Key: Arbisoft" \
 		-d '{"query": "policy", "limit": 2}' | python3 -m json.tool
 	@echo ""
-	@echo "Testing with organization UUID (Sample Organization):"
+	@echo "Testing with organization slug (Arbisoft):"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: 0988aa4c-2ed7-4296-ade7-be489232eb10" \
+		-H "X-API-Key: arbisoft" \
 		-d '{"query": "leave", "limit": 2}' | python3 -m json.tool
 	@echo ""
 
@@ -240,19 +236,19 @@ test-chat:
 	@echo "Question 1: What are the working hours?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: Sample Organization" \
+		-H "X-API-Key: Arbisoft" \
 		-d '{"message": "What are the working hours?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Question 2 (Follow-up): How many vacation days do I get?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: Sample Organization" \
+		-H "X-API-Key: Arbisoft" \
 		-d '{"message": "How many vacation days do I get?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Question 3 (Follow-up): What about remote work?"
 	@curl -X POST http://127.0.0.1:8000/api/v1/chat/ \
 		-H "Content-Type: application/json" \
-		-H "X-API-Key: Sample Organization" \
+		-H "X-API-Key: Arbisoft" \
 		-d '{"message": "What about remote work?", "session_id": "makefile-test", "include_sources": true}' | python3 -m json.tool
 	@echo ""
 	@echo "Checking LangChain session stats:"

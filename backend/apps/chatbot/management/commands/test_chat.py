@@ -7,6 +7,7 @@ from django.core.management.base import BaseCommand, CommandError
 import json
 import uuid
 
+from apps.chatbot.management import resolve_organization_id
 from apps.chatbot.services.search import VectorSearchService
 from apps.chatbot.services.providers import create_rag_chatbot
 
@@ -40,8 +41,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--organization-id',
             type=str,
-            default="dcbd2e32-923b-420d-a58a-c6523da4af6d",
-            help='Organization ID to search within'
+            default="arbisoft",
+            help='Organization ID, slug, or name to search within'
         )
         parser.add_argument(
             '--json',
@@ -59,7 +60,7 @@ class Command(BaseCommand):
         session_id = options['session_id'] or str(uuid.uuid4())
         limit = options['limit']
         min_similarity = options['min_similarity']
-        organization_id = options['organization_id']
+        organization_id = resolve_organization_id(options['organization_id'])
         json_output = options['json']
         show_sources = options['show_sources']
 
