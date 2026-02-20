@@ -57,3 +57,33 @@ class DocumentDetailSerializer(serializers.ModelSerializer):
         if obj.file:
             return obj.file.url
         return None
+
+
+class DocumentUploadSerializer(serializers.ModelSerializer):
+    """Serializer for uploading new documents."""
+
+    file = serializers.FileField(required=True)
+    title = serializers.CharField(max_length=500, required=True)
+
+    class Meta:
+        model = Document
+        fields = ["title", "file"]
+
+    def create(self, validated_data):
+        """Create a document with the uploaded file."""
+        request = self.context.get('request')
+        organization = getattr(request, 'organization', None)
+
+        if not organization:
+            raise serializers.ValidationError("Organization not found in request")
+
+        # Create the document
+        document = Document.objects.create(
+            title=validated_data['title'],
+            file=validated_data['file'],
+            organization=organization,
+            created_by=getattr(request.user, 'pk', None) if request.user.is_authenticated else None,
+            status=Document.Status.PENDING
+        )
+
+        return document

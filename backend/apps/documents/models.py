@@ -8,6 +8,8 @@ asynchronously by the Celery task `process_document` — NOT in save().
 import logging
 import uuid
 
+from typing import Any, Dict
+
 from django.conf import settings
 from django.db import models
 from django.db.models import CASCADE, SET_NULL
@@ -44,11 +46,28 @@ class Document(TimeStampedModel):
         COMPLETED = "completed", "Completed"
         FAILED = "failed", "Failed"
 
+    class Category(models.TextChoices):
+        GENERAL = "general", "General"
+        HR = "hr", "HR"
+        FINANCE = "finance", "Finance"
+        POLICY = "policy", "Policy"
+        CV = "cv", "CV / Resume"
+        LEGAL = "legal", "Legal"
+        TECHNICAL = "technical", "Technical"
+        OTHER = "other", "Other"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     organization = models.ForeignKey(
         Organization, on_delete=CASCADE, related_name="documents"
     )
     title = models.CharField(max_length=500)
+    category = models.CharField(
+        max_length=20,
+        choices=Category.choices,
+        default=Category.GENERAL,
+        db_index=True,
+        help_text="Document category for filtering and context",
+    )
     file = models.FileField(upload_to=document_upload_path, blank=True, null=True)
     is_active = models.BooleanField(
         default=True,
@@ -115,6 +134,23 @@ class Document(TimeStampedModel):
             logger.info("Scheduled processing for document %s (%s)", self.title, self.pk)
         except Exception as e:
             logger.error(f"Failed to schedule processing for document {self.title}: {e}", exc_info=True)
+
+    def process_document(self, chunk_size: int = 1000, chunk_overlap: int = 200) -> Dict[str, Any]:
+        """
+        Process this document using the unified processing pipeline.
+
+        This method can be called from admin, API views, or anywhere else
+        to trigger document processing synchronously.
+
+        Args:
+            chunk_size: Size of text chunks
+            chunk_overlap: Overlap between chunks
+
+        Returns:
+            Dict with processing results
+        """
+        from apps.documents.services.document_processor import process_document
+        return process_document(self, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     @property
     def is_processed(self) -> bool:

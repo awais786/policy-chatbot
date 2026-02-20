@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Policy Chatbot</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 400px;
+            height: 600px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .chat-header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 16px;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .message.user {
+            text-align: right;
+        }
+
+        .message.bot {
+            text-align: left;
+        }
+
+        .message-content {
+            display: inline-block;
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.bot .message-content {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            text-align: left;
+        }
+
+        .message.bot .message-content p {
+            margin: 0 0 8px 0;
+        }
+
+        .message.bot .message-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .message.bot .message-content ol,
+        .message.bot .message-content ul {
+            margin: 6px 0 6px 18px;
+            padding: 0;
+        }
+
+        .message.bot .message-content li {
+            margin-bottom: 4px;
+        }
+
+        .message.bot .message-content strong {
+            font-weight: 600;
+            color: #222;
+        }
+
+        .message.bot .sources {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #666;
+            padding: 8px 12px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            border-bottom-left-radius: 4px;
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 12px 16px;
+            background: white;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 16px;
+        }
+
+        .typing-dots {
+            display: inline-block;
+        }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #667eea;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        .chat-input {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e9ecef;
+            display: flex;
+            gap: 12px;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s ease;
+        }
+
+        .chat-input input:focus {
+            border-color: #667eea;
+        }
+
+        .chat-input button {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .chat-input button:hover {
+            transform: translateY(-1px);
+        }
+
+        .chat-input button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            background: #fee;
+            color: #c33;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            margin-bottom: 8px;
+            border-left: 3px solid #c33;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+
+        @media (max-width: 480px) {
+            .chat-container {
+                max-width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1 id="chatTitle">Policy Chatbot</h1>
+            <p id="chatSubtitle">Ask me about company policies</p>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">
+                <div class="message-content">
+                    Hello! I'm your policy assistant. I can help you with questions about company policies, procedures, and guidelines. What would you like to know?
+                </div>
+            </div>
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dots">
+                <span></span><span></span><span></span>
+            </div>
+        </div>
+
+        <div class="chat-input">
+            <input type="text" id="messageInput" placeholder="Ask about policies..." maxlength="1000">
+            <button id="sendButton">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // ---------------------------------------------------------------
+        // CONFIG — change organization_id to switch tenants
+        // ---------------------------------------------------------------
+        const CONFIG = {
+            apiUrl: 'http://127.0.0.1:8000/api/v1/chat/',
+            organizationId: '0988aa4c-2ed7-4296-ade7-be489232eb10',  // Arbisoft
+            organizationName: 'Arbisoft',
+        };
+
+        class PolicyChatbot {
+            constructor() {
+                this.apiUrl = CONFIG.apiUrl;
+                this.organizationId = CONFIG.organizationId;
+                this.sessionId = this.generateSessionId();
+                this.messagesContainer = document.getElementById('chatMessages');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+                this.typingIndicator = document.getElementById('typingIndicator');
+
+                this.init();
+            }
+
+            init() {
+                // Update header with org name
+                document.getElementById('chatTitle').textContent =
+                    CONFIG.organizationName + ' Policy Chatbot';
+                document.getElementById('chatSubtitle').textContent =
+                    'Ask me about ' + CONFIG.organizationName + ' policies';
+
+                // Update welcome message
+                const welcomeMsg = this.messagesContainer.querySelector('.message-content');
+                if (welcomeMsg) {
+                    welcomeMsg.textContent =
+                        'Hello! I\'m the ' + CONFIG.organizationName +
+                        ' policy assistant. Ask me anything about company policies, procedures, and guidelines.';
+                }
+
+                this.sendButton.addEventListener('click', () => this.sendMessage());
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                this.messageInput.focus();
+            }
+
+            generateSessionId() {
+                return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            }
+
+            // Simple markdown-to-HTML renderer for bot responses
+            renderMarkdown(text) {
+                // Escape HTML first
+                let html = text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+
+                // Bold: **text**
+                html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+                // Split into lines for list detection
+                const lines = html.split('\n');
+                const result = [];
+                let inList = false;
+                let listType = '';
+
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i];
+                    const numberedMatch = line.match(/^(\d+)\.\s+(.+)/);
+                    const bulletMatch = line.match(/^[-•*]\s+(.+)/);
+
+                    if (numberedMatch) {
+                        if (!inList || listType !== 'ol') {
+                            if (inList) result.push(`</${listType}>`);
+                            result.push('<ol>');
+                            inList = true; listType = 'ol';
+                        }
+                        result.push(`<li>${numberedMatch[2]}</li>`);
+                    } else if (bulletMatch) {
+                        if (!inList || listType !== 'ul') {
+                            if (inList) result.push(`</${listType}>`);
+                            result.push('<ul>');
+                            inList = true; listType = 'ul';
+                        }
+                        result.push(`<li>${bulletMatch[1]}</li>`);
+                    } else {
+                        if (inList) { result.push(`</${listType}>`); inList = false; listType = ''; }
+                        if (line.trim()) result.push(`<p>${line}</p>`);
+                        else if (result.length) result.push('');
+                    }
+                }
+                if (inList) result.push(`</${listType}>`);
+                return result.join('');
+            }
+
+            showTyping() {
+                this.typingIndicator.style.display = 'block';
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+
+            hideTyping() {
+                this.typingIndicator.style.display = 'none';
+            }
+
+            addMessage(content, type = 'bot', sources = null) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}`;
+
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'message-content';
+
+                if (type === 'bot') {
+                    contentDiv.innerHTML = this.renderMarkdown(content);
+                } else {
+                    contentDiv.textContent = content;
+                }
+                messageDiv.appendChild(contentDiv);
+
+                if (sources && sources.length > 0) {
+                    const sourcesDiv = document.createElement('div');
+                    sourcesDiv.className = 'sources';
+                    const titles = [...new Set(sources.map(s => s.document_title).filter(Boolean))];
+                    sourcesDiv.textContent = `Source${titles.length > 1 ? 's' : ''}: ${titles.join(', ')}`;
+                    messageDiv.appendChild(sourcesDiv);
+                }
+
+                this.messagesContainer.appendChild(messageDiv);
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+            }
+
+            showError(message) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.textContent = message;
+                this.messagesContainer.appendChild(errorDiv);
+                this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+
+                setTimeout(() => {
+                    if (errorDiv.parentNode) errorDiv.remove();
+                }, 5000);
+            }
+
+            async sendMessage() {
+                const message = this.messageInput.value.trim();
+                if (!message) return;
+
+                this.addMessage(message, 'user');
+                this.messageInput.value = '';
+                this.sendButton.disabled = true;
+                this.messageInput.disabled = true;
+                this.showTyping();
+
+                try {
+                    const response = await fetch(this.apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: message,
+                            session_id: this.sessionId,
+                            organization_id: this.organizationId,
+                            include_sources: true,
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(data.error || `HTTP ${response.status}`);
+                    }
+
+                    this.hideTyping();
+                    this.addMessage(data.message || 'No response received', 'bot', data.sources);
+
+                } catch (error) {
+                    this.hideTyping();
+                    this.showError(`Failed to get response: ${error.message}`);
+                    console.error('Chat error:', error);
+                } finally {
+                    this.sendButton.disabled = false;
+                    this.messageInput.disabled = false;
+                    this.messageInput.focus();
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new PolicyChatbot();
+        });
+    </script>
+</body>
+</html>

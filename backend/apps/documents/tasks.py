@@ -19,6 +19,7 @@ from apps.documents.services.pdf_extractor import (
 )
 from apps.documents.services.text_chunker import chunk_text
 from apps.documents.services.embeddings import generate_embeddings, EmbeddingError
+from apps.documents.services.document_processor import process_document_by_id, DocumentProcessingError
 
 logger = logging.getLogger(__name__)
 
@@ -84,14 +85,21 @@ def process_document(self, document_id: str) -> dict:
         document.metadata.update(extraction["metadata"])
         document.save(update_fields=["text_content", "metadata", "updated_at"])
 
-        # --- Step 2: Chunk text and save chunks WITHOUT embeddings ---
-        logger.info("Step 2/3: Chunking text (%d chars)", len(full_text))
+        # --- Step 2: Chunk text using enhanced pipeline ---
+        logger.info("Step 2/3: Enhanced text chunking (%d chars)", len(full_text))
 
-        chunks = chunk_text(full_text)
+        # Use enhanced chunking with preprocessing, section detection, and spaCy
+        chunks = chunk_text(
+            full_text,
+            chunk_size=1000,  # Default chunk size
+            chunk_overlap=200,
+            preserve_sentences=True
+        )
+
         if not chunks:
-            raise PDFExtractionError("Text chunking produced no chunks.")
+            raise PDFExtractionError("Enhanced text chunking produced no chunks.")
 
-        logger.info("Created %d chunks", len(chunks))
+        logger.info("Created %d enhanced chunks with rich metadata", len(chunks))
 
         # --- Step 3: Save chunks to database (without embeddings) ---
         logger.info("Step 3/3: Saving chunks to database")
@@ -103,11 +111,13 @@ def process_document(self, document_id: str) -> dict:
 
                 chunk_objects = []
                 for chunk_data in chunks:
+                    # chunks is now a list of TextChunk objects with enhanced metadata
                     chunk_objects.append(DocumentChunk(
                         document=document,
                         organization=document.organization,
                         content=chunk_data.content,
                         chunk_index=chunk_data.chunk_index,
+                        metadata=chunk_data.metadata,  # Enhanced metadata with section info, etc.
                         # embedding=None by default - will be populated later
                     ))
 

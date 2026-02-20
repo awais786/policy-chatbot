@@ -11,9 +11,13 @@ from drf_spectacular.views import (
 )
 from django.conf import settings
 from django.conf.urls.static import static
+from django.views.generic import TemplateView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # Chat widget
+    path('chat/', TemplateView.as_view(template_name='chat_widget.html', content_type='text/html'), name='chat-widget'),
 
     # API v1
     path('api/v1/documents/', include('apps.documents.api.urls')),

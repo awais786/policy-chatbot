@@ -4,11 +4,13 @@ URL patterns for the documents API (mounted at api/v1/documents/).
 
 from django.urls import path
 
-from .views import DocumentDetailDeleteView, DocumentListView
+from .views import DocumentDetailDeleteView, DocumentListView, DocumentProcessView, DocumentUploadView
 
 app_name = "documents"
 
 urlpatterns = [
     path("", DocumentListView.as_view(), name="document-list"),
     path("<uuid:pk>/", DocumentDetailDeleteView.as_view(), name="document-detail"),
+    path("<uuid:pk>/process/", DocumentProcessView.as_view(), name="document-process"),
+    path("upload/", DocumentUploadView.as_view(), name="document-upload"),
 ]

@@ -132,6 +132,9 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # ---------------------------------------------------------------------------
@@ -204,7 +207,7 @@ SPECTACULAR_SETTINGS = {
 # CORS
 # ---------------------------------------------------------------------------
 
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins for development
 CORS_ALLOWED_ORIGINS = [h.strip() for h in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if h.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
@@ -221,8 +224,8 @@ ANTHROPIC_API_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50 MB
 ALLOWED_DOCUMENT_TYPES = ['application/pdf']
-CHUNK_SIZE = 1000  # tokens
-CHUNK_OVERLAP = 200  # tokens
+CHUNK_SIZE = 500   # characters — smaller chunks keep contact details together
+CHUNK_OVERLAP = 100  # characters
 
 # ---------------------------------------------------------------------------
 # Embedding provider — "ollama" (local) or "openai" (cloud)
@@ -248,11 +251,17 @@ DEFAULT_LLM_TEMPERATURE = 0.7
 DEFAULT_LLM_MAX_TOKENS = 1000
 
 # ---------------------------------------------------------------------------
+# Default organization (used when no X-API-Key or organization_id provided)
+# ---------------------------------------------------------------------------
+
+DEFAULT_ORGANIZATION_ID = os.environ.get('DEFAULT_ORGANIZATION_ID', 'dcbd2e32-923b-420d-a58a-c6523da4af6d')
+
+# ---------------------------------------------------------------------------
 # Search defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_TOP_K = 5
-DEFAULT_SIMILARITY_THRESHOLD = 0.7
+DEFAULT_TOP_K = 10
+DEFAULT_SIMILARITY_THRESHOLD = 0.3
 
 # ---------------------------------------------------------------------------
 # Chatbot (RAG) defaults

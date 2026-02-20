@@ -162,7 +162,24 @@ class VectorSearchService:
         with connection.cursor() as cursor:
             cursor.execute(sql, params)
             columns = [col[0] for col in cursor.description]
-            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            rows = [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+        import json as _json
+        for row in rows:
+            title = (row.get("document_title") or "").strip()
+            content = (row.get("content") or "").strip()
+
+            # Drop document_metadata from response (internal use only)
+            row.pop("document_metadata", None)
+
+            # Prefix every chunk with [Document: title] so the LLM
+            # always knows which document/person this chunk belongs to
+            if title:
+                row["content"] = f"[Document: {title}]\n{content}"
+            else:
+                row["content"] = content
+
+        return rows
 
     def search_by_document(
         self,

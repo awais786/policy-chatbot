@@ -206,18 +206,8 @@ test-system: test-search test-chat
 # Test search functionality
 test-search:
 	@echo "🔍 Testing semantic search functionality..."
-	@echo ""
-	@echo "Testing search for 'leave policy' (Sample Organization):"
-	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
-		-H "Content-Type: application/json" \
-		-H "X-API-Key: Sample Organization" \
-		-d '{"query": "leave policy", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
-	@echo ""
-	@echo "Testing search for 'password requirements' (Sample Organization):"
-	@curl -X POST http://127.0.0.1:8000/api/v1/chat/search/ \
-		-H "Content-Type: application/json" \
-		-H "X-API-Key: Sample Organization" \
-		-d '{"query": "password requirements", "limit": 3, "min_similarity": 0.3}' | python3 -m json.tool
+	@echo "First, let's create sample data and get organization ID..."
+	@cd backend && python manage.py test_search
 	@echo ""
 
 # Test multiple organizations
