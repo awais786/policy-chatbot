@@ -16,9 +16,11 @@ from apps.chatbot.api.serializers import (
     SearchRequestSerializer,
 )
 from apps.chatbot.models import SearchQuery
+from apps.chatbot.management import resolve_organization_id
 from apps.chatbot.services.chat_history import get_chat_store_stats, get_recent_messages
 from apps.chatbot.services.providers import create_rag_chatbot
 from apps.chatbot.services.search import VectorSearchService
+from apps.core.models import Organization
 from apps.documents.models import Document
 
 logger = logging.getLogger(__name__)
@@ -31,16 +33,35 @@ _META_KEYWORDS = (
 )
 
 
+
 def _get_organization_id(request, data=None) -> str:
+    # Explicit org in request body
     if data and "organization_id" in data:
-        return str(data["organization_id"])
+        return resolve_organization_id(str(data["organization_id"]))
+
+    # From middleware / auth
     org = getattr(request, "organization", None)
     if org is not None:
         return str(org.id)
-    default_org = getattr(settings, "DEFAULT_ORGANIZATION_ID", None)
-    if default_org:
-        return str(default_org)
-    raise ValueError("No organization resolved. Set DEFAULT_ORGANIZATION_ID in settings.")
+
+    # X-API-Key header (resolve by key, slug, or name)
+    api_key = request.META.get("HTTP_X_API_KEY")
+    if api_key:
+        return resolve_organization_id(api_key)
+
+    # Default slug from settings
+    default_slug = getattr(settings, "DEFAULT_ORGANIZATION_SLUG", None)
+    if default_slug:
+        return resolve_organization_id(default_slug)
+
+    # Auto-detect if only one org exists
+    orgs = Organization.objects.filter(is_active=True)
+    if orgs.count() == 1:
+        return str(orgs.first().id)
+
+    raise ValueError(
+        "Multiple organizations exist. Provide organization_id in request body or X-API-Key header."
+    )
 
 
 def _build_document_list_context(organization_id: str) -> str:

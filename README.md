@@ -67,6 +67,7 @@ make dev-simple
 **That's it!** Access at:
 - **Admin**: http://127.0.0.1:8000/admin/ 
 - **API**: http://127.0.0.1:8000/api/v1/
+- **Chat Widget**: http://127.0.0.1:8000/static/chat_widget.html
 
 ## 📊 Available Commands
 

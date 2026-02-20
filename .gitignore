@@ -80,6 +80,10 @@ celerybeat.pid
 # Logs
 logs/
 *.log
+local_setup.log
+
+# Backup files
+*.bak
 
 # Node (for widget)
 node_modules/

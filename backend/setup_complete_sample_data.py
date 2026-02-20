@@ -1,245 +1,94 @@
 #!/usr/bin/env python3
 """
-Complete sample data setup script - creates documents, chunks, and embeddings
+Setup script — creates Arbisoft org, superuser, loads PDF, processes it (chunks + embeddings).
 """
 import os
+import secrets
 import sys
+
 import django
 
-# Setup Django
 sys.path.insert(0, os.path.dirname(__file__))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.local')
 django.setup()
 
+from django.core.files import File
+
 from apps.core.models import Organization, User
-from apps.documents.models import Document, DocumentChunk
-from apps.documents.services.embeddings import generate_embeddings
+from apps.documents.models import Document
+from apps.documents.services.document_processor import process_document
 
-def simple_chunk_text(text, chunk_size=500):
-    """Simple text chunking by sentences with metadata"""
-    if not text or not text.strip():
-        return []
 
-    sentences = []
-    for sent in text.replace('\n', ' ').split('.'):
-        sent = sent.strip()
-        if sent:
-            sentences.append(sent + '.')
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PDF_PATH = os.path.join(REPO_ROOT, 'Arbisoft - FAQ.pdf')
 
-    chunks = []
-    current_chunk = ''
-    char_position = 0
 
-    for sentence in sentences:
-        if len(current_chunk + sentence) <= chunk_size:
-            current_chunk += ' ' + sentence if current_chunk else sentence
-        else:
-            if current_chunk:
-                # Calculate metadata for this chunk
-                start_pos = char_position
-                end_pos = char_position + len(current_chunk)
-                word_count = len(current_chunk.split())
-                char_count = len(current_chunk)
+def setup():
+    print('=== Setting up sample data ===')
 
-                chunks.append({
-                    'content': current_chunk.strip(),
-                    'metadata': {
-                        'start_char': start_pos,
-                        'end_char': end_pos,
-                        'char_count': char_count,
-                        'word_count': word_count,
-                        'sentences_count': current_chunk.count('.'),
-                        'chunk_method': 'sentence_splitting',
-                        'chunk_size_limit': chunk_size
-                    }
-                })
-                char_position = end_pos + 1
-            current_chunk = sentence
-
-    if current_chunk:
-        # Handle the last chunk
-        start_pos = char_position
-        end_pos = char_position + len(current_chunk)
-        word_count = len(current_chunk.split())
-        char_count = len(current_chunk)
-
-        chunks.append({
-            'content': current_chunk.strip(),
-            'metadata': {
-                'start_char': start_pos,
-                'end_char': end_pos,
-                'char_count': char_count,
-                'word_count': word_count,
-                'sentences_count': current_chunk.count('.'),
-                'chunk_method': 'sentence_splitting',
-                'chunk_size_limit': chunk_size
-            }
-        })
-
-    return chunks
-
-def setup_complete_sample_data():
-    print('🎯 Creating complete sample data for Policy Chatbot...')
-
-    # Step 0: Create organization and superuser
-    print('\n🏢 Step 0: Creating organization and superuser...')
-
-    org, created = Organization.objects.get_or_create(
-        name='Sample Organization',
-        defaults={'slug': 'sample-org', 'is_active': True}
-    )
-    print(f'✅ Organization: {org.name} (created: {created})')
-
+    # Superuser
     if not User.objects.filter(is_superuser=True).exists():
         User.objects.create_superuser('admin', 'admin@example.com', 'admin123')
-        print('✅ Superuser created: admin/admin123')
+        print('Superuser created: admin / admin123')
     else:
-        print('✅ Superuser already exists')
+        print('Superuser already exists')
 
-    # Sample documents
-    documents_data = [
-        {
-            'title': 'Company Policy Manual',
-            'text_content': '''Company Policy Manual - Employee Handbook
-
-Working Hours: Our standard working hours are Monday to Friday, 9:00 AM to 5:00 PM. 
-Employees are expected to maintain punctuality and regular attendance.
-
-Leave Policy:
-- Annual Leave: 21 days per year
-- Sick Leave: 10 days per year  
-- Maternity/Paternity Leave: 12 weeks paid leave
-- Emergency Leave: 3 days per year for family emergencies
-
-Remote Work Policy: Employees may work remotely up to 2 days per week with manager approval.
-Remote work requests must be submitted at least 48 hours in advance.
-
-Benefits Package:
-- Health insurance coverage for employee and family
-- 401(k) retirement plan with company matching
-- Professional development budget: 2000 dollars per year'''
-        },
-        {
-            'title': 'IT Security Guidelines',
-            'text_content': '''IT Security Guidelines - Information Technology Security Policy
-
-Password Requirements:
-- Minimum 12 characters with uppercase, lowercase, numbers, and symbols
-- Passwords must be changed every 90 days
-- Two-factor authentication is mandatory for all systems
-
-Data Protection:
-- All sensitive data must be encrypted when stored or transmitted
-- USB drives and external storage devices require approval
-- Personal devices cannot access company data without proper security software
-
-Network Access:
-- VPN is required for all remote connections
-- Guest network access requires IT approval
-- Unauthorized software installation is prohibited'''
-        },
-        {
-            'title': 'Travel and Expense Policy',
-            'text_content': '''Travel and Expense Policy - Business Travel Guidelines
-
-Travel Authorization: All business travel must be pre-approved by department manager.
-Travel requests should be submitted at least 2 weeks in advance.
-
-Accommodation:
-- Hotel stays should not exceed 200 dollars per night in major cities
-- 150 dollars per night limit in smaller cities
-
-Meals and Entertainment:
-- Meal allowance: 75 dollars per day for domestic travel
-- 100 dollars per day for international travel
-- Receipts required for all expenses over 25 dollars
-
-Transportation:
-- Economy class flights for domestic travel under 6 hours
-- Business class allowed for international flights over 8 hours'''
+    # Organization
+    org, created = Organization.objects.get_or_create(
+        slug='arbisoft',
+        defaults={
+            'name': 'Arbisoft',
+            'is_active': True,
+            'api_key': f'pk_{secrets.token_urlsafe(32)}',
         }
-    ]
+    )
+    print(f'Organization: {org.name} ({"created" if created else "exists"})')
 
-    print('\n📄 Step 1: Creating sample documents...')
-    for doc_data in documents_data:
-        document, created = Document.objects.get_or_create(
-            title=doc_data['title'],
-            organization=org,
-            defaults={
-                'text_content': doc_data['text_content'],
-                'status': Document.Status.COMPLETED,
-                'is_active': True
-            }
-        )
+    # Load PDF
+    if not os.path.isfile(PDF_PATH):
+        print(f'PDF not found at {PDF_PATH} — skipping document load')
+        return
 
-        if created:
-            print(f'  ✅ Created: {document.title}')
-        else:
-            print(f'  ✅ Already exists: {document.title}')
+    doc, doc_created = Document.objects.get_or_create(
+        title='Arbisoft - FAQ',
+        organization=org,
+        defaults={
+            'status': Document.Status.PROCESSING,  # skip post_save auto-schedule
+            'is_active': True,
+            'category': Document.Category.POLICY,
+        }
+    )
 
-    print('\n🔄 Step 2: Generate chunks for documents...')
-
-    # Process documents to create chunks
-    documents = Document.objects.filter(text_content__isnull=False, is_active=True).exclude(text_content='')
-    chunks_created = 0
-
-    for doc in documents:
-        existing_chunks = DocumentChunk.objects.filter(document=doc).count()
-        if existing_chunks > 0:
-            print(f'  ✅ {doc.title} already has {existing_chunks} chunks')
-            continue
-
-        chunks = simple_chunk_text(doc.text_content)
-        for i, chunk_data in enumerate(chunks):
-            DocumentChunk.objects.create(
-                document=doc,
-                organization=doc.organization,
-                chunk_index=i,
-                content=chunk_data['content'],
-                metadata=chunk_data['metadata']
-            )
-            chunks_created += 1
-
-        print(f'  📦 Created {len(chunks)} chunks for {doc.title} (with metadata)')
-
-    print(f'📝 Total new chunks created: {chunks_created}')
-
-    print('\n🔄 Step 3: Generate embeddings for all chunks...')
-
-    # Generate embeddings for chunks without them
-    chunks_without_embeddings = DocumentChunk.objects.filter(embedding__isnull=True)
-    embeddings_created = 0
-
-    for chunk in chunks_without_embeddings:
-        try:
-            embeddings = generate_embeddings([chunk.content])
-            if embeddings and len(embeddings) > 0:
-                chunk.embedding = embeddings[0]
-                chunk.save()
-                embeddings_created += 1
-                print(f'  ✅ {chunk.document.title} - Chunk {chunk.chunk_index}')
-        except Exception as e:
-            print(f'  ❌ Error with {chunk.document.title} - Chunk {chunk.chunk_index}: {e}')
-
-    print(f'🧠 Total embeddings created: {embeddings_created}')
-
-    # Final summary
-    total_docs = Document.objects.filter(is_active=True).count()
-    total_chunks = DocumentChunk.objects.count()
-    total_embeddings = DocumentChunk.objects.filter(embedding__isnull=False).count()
-
-    print('\n🎉 Complete sample data setup finished!')
-    print(f'📊 Summary:')
-    print(f'  📄 Documents: {total_docs}')
-    print(f'  📝 Chunks: {total_chunks}')
-    print(f'  🧠 Embeddings: {total_embeddings}')
-
-    if total_embeddings == total_chunks:
-        print('\n✅ All chunks have embeddings! Ready for testing.')
-        print('  - Test search: make test-search')
-        print('  - Test chat: make test-chat')
+    if doc_created or not doc.file:
+        with open(PDF_PATH, 'rb') as f:
+            doc.file.save('Arbisoft - FAQ.pdf', File(f), save=True)
+        print(f'PDF attached to document: {doc.title}')
     else:
-        print(f'\n⚠️  {total_chunks - total_embeddings} chunks missing embeddings')
+        print(f'Document already has file: {doc.title}')
+
+    # Process: extract text → chunk → embed
+    if doc.status != Document.Status.COMPLETED or doc.chunks.count() == 0:
+        print('Processing document (extract → chunk → embed)...')
+        result = process_document(doc)
+        print(f'  Chunks: {result["chunks_created"]}')
+        print(f'  Embeddings: {result["embeddings_generated"]}')
+        print(f'  Text length: {result["text_length"]} chars')
+    else:
+        print(f'Document already processed ({doc.chunks.count()} chunks)')
+
+    # Summary
+    print(f'\n=== Done ===')
+    print(f'  Documents: {Document.objects.filter(is_active=True).count()}')
+    print(f'  Chunks: {doc.chunks.count()}')
+    print(f'  Embeddings: {doc.chunks.filter(embedding__isnull=False).count()}')
+    print(f'  Admin: http://127.0.0.1:8000/admin/ (admin / admin123)')
+
 
 if __name__ == '__main__':
-    setup_complete_sample_data()
+    setup()
+
+    # Start Django dev server
+    print('\n🌐 Starting Django dev server at http://127.0.0.1:8000 ...')
+    from django.core.management import call_command
+    call_command('runserver', '127.0.0.1:8000')
+

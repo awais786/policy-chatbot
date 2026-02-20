@@ -6,6 +6,7 @@ Usage: python manage.py test_search "your search query here"
 from django.core.management.base import BaseCommand, CommandError
 import json
 
+from apps.chatbot.management import resolve_organization_id
 from apps.chatbot.services.search import VectorSearchService
 
 
@@ -33,8 +34,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--organization-id',
             type=str,
-            default="dcbd2e32-923b-420d-a58a-c6523da4af6d",
-            help='Organization ID to search within'
+            default="arbisoft",
+            help='Organization ID, slug, or name to search within'
         )
         parser.add_argument(
             '--json',
@@ -46,7 +47,7 @@ class Command(BaseCommand):
         query = options['query']
         limit = options['limit']
         min_similarity = options['min_similarity']
-        organization_id = options['organization_id']
+        organization_id = resolve_organization_id(options['organization_id'])
         json_output = options['json']
 
         self.stdout.write(f"Testing search for: '{query}'")
