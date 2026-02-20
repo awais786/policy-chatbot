@@ -122,15 +122,20 @@ class Document(TimeStampedModel):
 
     def schedule_processing(self):
         """
-        Dispatch the async processing pipeline (extract → chunk → embed).
-
+        Dispatch the processing pipeline (extract → chunk → embed).
         Call this after a document is successfully saved with a file attached.
-        In development (CELERY_TASK_ALWAYS_EAGER=True) this runs synchronously.
+        Now runs synchronously if Celery is not installed.
         """
         try:
             # Import here to avoid circular imports (tasks.py imports models.py)
-            from apps.documents.tasks import process_document
-            process_document.delay(str(self.pk))
+            try:
+                from apps.documents.tasks import process_document
+                # Try to use Celery if available
+                process_document.delay(str(self.pk))
+            except ImportError:
+                # Celery not installed, run synchronously
+                from apps.documents.services.document_processor import process_document_by_id
+                process_document_by_id(str(self.pk))
             logger.info("Scheduled processing for document %s (%s)", self.title, self.pk)
         except Exception as e:
             logger.error(f"Failed to schedule processing for document {self.title}: {e}", exc_info=True)
