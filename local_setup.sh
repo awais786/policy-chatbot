@@ -3,7 +3,7 @@
 set -euo pipefail
 
 # Defaults (can be overridden by env)
-DB_NAME="${DB_NAME:-chatbot_db_20}"
+DB_NAME="${DB_NAME:-chatbot_db}"
 DB_USER="${DB_USER:-postgres}"
 DB_PASS="${DB_PASS:-postgres}"
 DB_HOST="${DB_HOST:-localhost}"
