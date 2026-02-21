@@ -7,4 +7,4 @@
 # Or use the Makefile:
 #   make install-deps
 
--r backend/requirements/development.txt
+-r backend/requirements/base.txt
